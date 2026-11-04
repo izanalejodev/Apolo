@@ -35,6 +35,12 @@
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "51fa7fb0-4dd1-4471-bab9-56afd9e3d646"
+      }
+    },
+    "owner": "izanalejo"
   }
 }
