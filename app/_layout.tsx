@@ -1,4 +1,4 @@
-import { Slot, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { AuthProvider, useAuth } from '../providers/AuthProvider';
@@ -29,7 +29,14 @@ function AuthGate() {
     );
   }
 
-  return <Slot />;
+  // Stack (en vez de Slot) para tener cabecera y botón de volver
+  return (
+    <Stack>
+      <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
+      <Stack.Screen name="index" options={{ title: 'Mi perfil' }} />
+      <Stack.Screen name="edit-profile" options={{ title: 'Editar perfil' }} />
+    </Stack>
+  );
 }
 
 export default function RootLayout() {

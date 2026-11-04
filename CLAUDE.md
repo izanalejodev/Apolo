@@ -27,6 +27,9 @@ Origen: el desarrollador es bailarín de baile urbano y parte de la idea de que 
 - `providers/AuthProvider.tsx`: sesión (`useAuth()` devuelve `session` y `loading`)
 - `app/_layout.tsx`: AuthGate, redirige a login si no hay sesión
 - `app/(auth)/login.tsx`: registro e inicio de sesión
+- `app/index.tsx`: mi perfil (provisional como pantalla principal); `app/edit-profile.tsx`: editarlo
+- `lib/profile.ts`: tipo `Profile`, lista cerrada de disciplinas, límites y consultas del perfil
+- `lib/alert.ts`: `showAlert`/`confirmAction`; usar siempre estos en vez de `Alert.alert` (que no hace nada en web)
 - `supabase/schema.sql`: tablas profiles, posts, follows, likes, comments + políticas RLS
 - `supabase/auth_trigger.sql`: trigger que crea el perfil al registrarse (el username va en `options.data.username`)
 
@@ -36,12 +39,13 @@ Origen: el desarrollador es bailarín de baile urbano y parte de la idea de que 
 - Variables en `.env.local` (excluido por `.gitignore`), con prefijo `EXPO_PUBLIC_`. Tras cambiarlas, `npx expo start -c`.
 - Toda tabla con RLS activado. Las reglas de quién puede qué viven en la base de datos, no en el cliente. Validar también en el servidor, no solo en la app.
 - No guardar contadores (likes, seguidores); se calculan con `count(*)`.
-- Antes de publicar en tiendas: confirmación de email activada y tabla `reports` (denuncias), que Apple/Google exigen en apps con contenido de usuarios.
+- Las disciplinas son una lista cerrada que vive en dos sitios: `DISCIPLINES` en `lib/profile.ts` y el CHECK `profiles_disciplines_validas` de `schema.sql`. Cambiar ambos a la vez. Igual con las columnas editables (`ProfileUpdate` ↔ `grant update`).
+- Antes de publicar en tiendas: confirmación de email activada (ahora desactivada para desarrollar) y tabla `reports` (denuncias), que Apple/Google exigen en apps con contenido de usuarios.
 - El proyecto se desarrolla fuera del horario laboral, con equipos y cuentas personales y sin reutilizar código ni datos de ninguna empresa (importante para poder venderlo con la titularidad clara). Repositorio privado en cuenta personal de GitHub.
 
 ## Próximos pasos (por orden)
 
-1. Pantalla de perfil: ver/editar (nombre, bio, ciudad, disciplinas, estilos, disponibilidad) y botón de cerrar sesión
+1. ~~Pantalla de perfil: ver/editar y botón de cerrar sesión~~ (hecho; avatar pendiente para el paso 2)
 2. Publicar foto/vídeo (Supabase Storage)
 3. Seguir a otros y feed
 4. Explorar y búsqueda con filtros

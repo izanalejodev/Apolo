@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -10,6 +9,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { showAlert } from '../../lib/alert';
 import { supabase } from '../../lib/supabase';
 
 // Misma regla que el CHECK de la tabla profiles
@@ -26,19 +26,19 @@ export default function LoginScreen() {
 
   async function handleSubmit() {
     if (!email.trim() || !password) {
-      return Alert.alert('Faltan datos', 'Escribe tu email y contraseña.');
+      return showAlert('Faltan datos', 'Escribe tu email y contraseña.');
     }
 
     if (isSignup) {
       const clean = username.trim().toLowerCase();
       if (!USERNAME_REGEX.test(clean)) {
-        return Alert.alert(
+        return showAlert(
           'Nombre de usuario no válido',
           'Entre 3 y 30 caracteres: letras minúsculas, números, punto o guion bajo.'
         );
       }
       if (password.length < 6) {
-        return Alert.alert('Contraseña corta', 'Usa al menos 6 caracteres.');
+        return showAlert('Contraseña corta', 'Usa al menos 6 caracteres.');
       }
     }
 
@@ -53,10 +53,10 @@ export default function LoginScreen() {
       });
 
       if (error) {
-        Alert.alert('No se pudo crear la cuenta', friendlyError(error.message));
+        showAlert('No se pudo crear la cuenta', friendlyError(error.message));
       } else if (!data.session) {
         // Pasa cuando "Confirm email" está activado en Supabase
-        Alert.alert('Revisa tu email', 'Te hemos enviado un enlace para confirmar tu cuenta.');
+        showAlert('Revisa tu email', 'Te hemos enviado un enlace para confirmar tu cuenta.');
       }
       // Si hay sesión, AuthGate redirige solo
     } else {
@@ -64,7 +64,7 @@ export default function LoginScreen() {
         email: email.trim(),
         password,
       });
-      if (error) Alert.alert('No se pudo iniciar sesión', friendlyError(error.message));
+      if (error) showAlert('No se pudo iniciar sesión', friendlyError(error.message));
     }
 
     setBusy(false);

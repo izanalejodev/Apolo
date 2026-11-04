@@ -59,6 +59,36 @@ create policy "profiles: cada uno edita el suyo"
 -- No hay política de INSERT ni DELETE: el perfil lo crea el trigger
 -- (security definer) y se borra en cascada al borrar el usuario.
 
+-- La política de UPDATE dice QUÉ FILA puedes tocar (la tuya), pero no qué
+-- COLUMNAS. Sin esto podrías cambiarte id, created_at o username desde la
+-- consola del navegador. Así solo se pueden editar estas columnas.
+-- (Debe coincidir con ProfileUpdate en lib/profile.ts.)
+revoke update on public.profiles from authenticated, anon;
+grant update (display_name, bio, city, disciplines, styles,
+              availability, services_text, contact_link)
+  on public.profiles to authenticated;
+
+-- Reglas de contenido del perfil (la app comprueba lo mismo, pero la que
+-- manda es la base de datos). Drop + add para poder re-ejecutar el fichero.
+alter table public.profiles drop constraint if exists profiles_disciplines_validas;
+alter table public.profiles add constraint profiles_disciplines_validas check (
+  -- misma lista que DISCIPLINES en lib/profile.ts
+  disciplines <@ array['baile','canto','musica','dj','fotografia','video',
+                       'actuacion','artes_visuales']::text[]
+  and cardinality(disciplines) <= 5
+);
+
+alter table public.profiles drop constraint if exists profiles_styles_limites;
+alter table public.profiles add constraint profiles_styles_limites check (
+  cardinality(styles) <= 15
+  and char_length(array_to_string(styles, ',')) <= 500
+);
+
+alter table public.profiles drop constraint if exists profiles_contact_link_http;
+alter table public.profiles add constraint profiles_contact_link_http check (
+  contact_link is null or contact_link ~* '^https?://'
+);
+
 
 -- ---------------------------------------------------------------------
 -- POSTS: publicaciones de foto o vídeo (vídeo de 60 s como máximo)
