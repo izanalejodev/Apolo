@@ -42,6 +42,7 @@ Origen: el desarrollador es bailarín de baile urbano y parte de la idea de que 
 - `lib/posts.ts`: crear, listar y borrar publicaciones; `app/new-post.tsx`: pantalla de publicar
 - `app/post/[id].tsx`: detalle de publicación (comentarios, comentar, borrar si es mía). La abren el feed (icono 💬) y las cuadrículas de perfil y explorar
 - Likes y comentarios: `lib/likes.ts` (`useLike`, optimista) y `lib/comments.ts`. Los posts traen `like_count`, `comment_count` y `liked_by_me`, que son campos calculados de PostgREST (funciones SQL que reciben `public.posts`, migración 004) y se piden en el `select` como columnas
+- Chat (migración 005): `lib/chat.ts`, `app/(tabs)/messages.tsx` (bandeja) y `app/chat/[id].tsx` (conversación). Solo 1 a 1 por ahora, pero con tabla `conversation_members` para poder hacer grupos. Las conversaciones se crean solo con la función `get_or_create_dm` (la app no puede insertar en `conversations` ni en `conversation_members`); bandeja con `my_conversations()`, leído con `mark_conversation_read()` (`last_read_at`). Las políticas usan `is_conversation_member()` (security definer, para evitar la recursión infinita de RLS). Tiempo real con Realtime `postgres_changes` sobre `messages` (aplica RLS); al suscribirse o reconectar se recarga para no perder lo que llegó sin conexión
 - `components/`: componentes reutilizables (nunca dentro de `app/`, que son rutas)
 - `supabase/auth_trigger.sql`: trigger que crea el perfil al registrarse (el username va en `options.data.username`)
 
@@ -64,7 +65,7 @@ Origen: el desarrollador es bailarín de baile urbano y parte de la idea de que 
 3. ~~Seguir a otros y feed~~ (hecho). Pendiente: guardar ancho/alto de la foto en `posts` para no recortarla en el feed
 4. ~~Explorar y búsqueda con filtros~~ (hecho). Pendiente: los chips de ciudad/estilo muestran solo los 30 más usados; las publicaciones se filtran por el perfil del autor, no por `posts.tags` (la app aún no pone tags)
 5. ~~Likes y comentarios~~ (hecho). Pendiente: un like/comentario hecho en el detalle no se refleja en el feed hasta refrescarlo (cada pantalla tiene su copia); lista de quién dio like
-6. Chat (tablas conversations, conversation_members, messages + Realtime)
+6. ~~Chat 1 a 1 con tiempo real~~ (hecho). Pendiente: contador de no leídos en la pestaña, notificaciones push, y que se pueda bloquear a alguien (va con el paso 7); si Realtime se queda corto con muchos usuarios, pasar a Broadcast
 7. Denuncias/moderación
 8. Más adelante: servicios como tabla propia, reservas y pagos
 

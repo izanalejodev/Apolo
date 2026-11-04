@@ -4,6 +4,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { PostGrid } from '../../components/PostGrid';
 import { ProfileCounts, ProfileHeader, profileButtons as b } from '../../components/ProfileHeader';
 import { showAlert } from '../../lib/alert';
+import { openDm } from '../../lib/chat';
 import { follow, isFollowing, unfollow } from '../../lib/follows';
 import { Post, fetchUserPosts } from '../../lib/posts';
 import { Profile, fetchProfile, fetchProfileCounts } from '../../lib/profile';
@@ -21,6 +22,7 @@ export default function UserProfileScreen() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [following, setFollowing] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [openingChat, setOpeningChat] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useFocusEffect(
@@ -69,6 +71,21 @@ export default function UserProfileScreen() {
     }
   }
 
+  // La conversación se crea (o se recupera, si ya existía) al pulsar. Si
+  // luego no escribes nada no pasa nada: las vacías no salen en la bandeja.
+  async function startChat() {
+    if (!id || openingChat) return;
+    setOpeningChat(true);
+    try {
+      const conversationId = await openDm(id);
+      router.push({ pathname: '/chat/[id]', params: { id: conversationId } });
+    } catch (e: any) {
+      showAlert('No se pudo abrir el chat', e.message);
+    } finally {
+      setOpeningChat(false);
+    }
+  }
+
   function openList(kind: 'followers' | 'following') {
     if (id) router.push({ pathname: '/follow-list', params: { userId: id, kind } });
   }
@@ -98,12 +115,17 @@ export default function UserProfileScreen() {
         onPressFollowers={() => openList('followers')}
         onPressFollowing={() => openList('following')}
       >
-        {/* Siguiendo = botón claro (ya está hecho); Seguir = oscuro (acción) */}
-        <Pressable style={[b.button, following && b.buttonLight]} onPress={toggleFollow}>
-          <Text style={[b.buttonText, following && b.buttonTextDark]}>
-            {following ? 'Siguiendo' : 'Seguir'}
-          </Text>
-        </Pressable>
+        <View style={styles.buttons}>
+          {/* Siguiendo = botón claro (ya está hecho); Seguir = oscuro (acción) */}
+          <Pressable style={[b.button, styles.flex, following && b.buttonLight]} onPress={toggleFollow}>
+            <Text style={[b.buttonText, following && b.buttonTextDark]}>
+              {following ? 'Siguiendo' : 'Seguir'}
+            </Text>
+          </Pressable>
+          <Pressable style={[b.button, b.buttonLight, styles.flex]} onPress={startChat} disabled={openingChat}>
+            <Text style={[b.buttonText, b.buttonTextDark]}>{openingChat ? '…' : 'Mensaje'}</Text>
+          </Pressable>
+        </View>
       </ProfileHeader>
 
       <PostGrid posts={posts} />
@@ -115,4 +137,6 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   container: { padding: 24, gap: 14 },
   muted: { color: '#666' },
+  buttons: { flexDirection: 'row', gap: 10 },
+  flex: { flex: 1 },
 });

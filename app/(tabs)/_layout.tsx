@@ -12,6 +12,7 @@ export default function TabsLayout() {
     <Tabs screenOptions={{ tabBarActiveTintColor: '#111' }}>
       <Tabs.Screen name="index" options={{ title: 'Inicio', tabBarIcon: icon('⌂') }} />
       <Tabs.Screen name="explore" options={{ title: 'Explorar', tabBarIcon: icon('⌕') }} />
+      <Tabs.Screen name="messages" options={{ title: 'Mensajes', tabBarIcon: icon('✉') }} />
       <Tabs.Screen name="profile" options={{ title: 'Mi perfil', tabBarIcon: icon('●') }} />
     </Tabs>
   );

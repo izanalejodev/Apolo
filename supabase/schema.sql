@@ -441,3 +441,194 @@ grant execute on function public.search_profiles(text, text, text, text, boolean
 grant execute on function public.explore_posts(text, text, text, timestamptz, uuid, integer)    to authenticated;
 grant execute on function public.popular_styles(integer) to authenticated;
 grant execute on function public.popular_cities(integer) to authenticated;
+
+
+-- ---------------------------------------------------------------------
+-- CHAT (migración 005): mensajes directos 1 a 1. Tabla de miembros para
+-- poder tener grupos más adelante. Las conversaciones solo se crean con
+-- get_or_create_dm() (la app no puede insertar en conversations ni en
+-- conversation_members). messages está en la publicación de Realtime.
+-- ---------------------------------------------------------------------
+create table public.conversations (
+  id         uuid primary key default gen_random_uuid(),
+  dm_key     text unique,  -- "uuidMenor:uuidMayor" en las de dos; null en grupos
+  created_at timestamptz not null default now()
+);
+
+create table public.conversation_members (
+  conversation_id uuid not null references public.conversations (id) on delete cascade,
+  user_id         uuid not null references public.profiles (id) on delete cascade,
+  last_read_at    timestamptz not null default now(),  -- posterior y no mío = no leído
+  joined_at       timestamptz not null default now(),
+  primary key (conversation_id, user_id)
+);
+
+create index conversation_members_user_idx on public.conversation_members (user_id);
+
+create table public.messages (
+  id              uuid primary key default gen_random_uuid(),
+  conversation_id uuid not null references public.conversations (id) on delete cascade,
+  sender_id       uuid not null references public.profiles (id) on delete cascade,
+  body            text not null check (char_length(trim(body)) between 1 and 2000),
+  created_at      timestamptz not null default now()
+);
+
+create index messages_conversation_created_idx
+  on public.messages (conversation_id, created_at desc, id desc);
+
+-- security definer para evitar la recursión infinita en la política de
+-- conversation_members (que tiene que consultar conversation_members)
+create or replace function public.is_conversation_member(conv uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.conversation_members m
+    where m.conversation_id = conv and m.user_id = (select auth.uid())
+  );
+$$;
+
+alter table public.conversations        enable row level security;
+alter table public.conversation_members enable row level security;
+alter table public.messages             enable row level security;
+
+create policy conversations_select on public.conversations
+  for select to authenticated
+  using (public.is_conversation_member(id));
+
+create policy conversation_members_select on public.conversation_members
+  for select to authenticated
+  using (public.is_conversation_member(conversation_id));
+
+create policy conversation_members_update on public.conversation_members
+  for update to authenticated
+  using ((select auth.uid()) = user_id)
+  with check ((select auth.uid()) = user_id);
+
+create policy messages_select on public.messages
+  for select to authenticated
+  using (public.is_conversation_member(conversation_id));
+
+create policy messages_insert on public.messages
+  for insert to authenticated
+  with check (
+    (select auth.uid()) = sender_id
+    and public.is_conversation_member(conversation_id)
+  );
+
+revoke insert, update, delete on public.conversations        from authenticated, anon;
+revoke insert, update, delete on public.conversation_members from authenticated, anon;
+revoke insert, update, delete on public.messages             from authenticated, anon;
+grant update (last_read_at) on public.conversation_members to authenticated;
+grant insert (conversation_id, sender_id, body) on public.messages to authenticated;
+
+create or replace function public.get_or_create_dm(other_user uuid)
+returns uuid
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  v_me   uuid := (select auth.uid());
+  v_key  text;
+  v_conv uuid;
+begin
+  if v_me is null then
+    raise exception 'Hace falta iniciar sesión';
+  end if;
+  if other_user is null or other_user = v_me then
+    raise exception 'No puedes escribirte a ti mismo';
+  end if;
+  if not exists (select 1 from public.profiles p where p.id = other_user) then
+    raise exception 'Ese usuario no existe';
+  end if;
+
+  v_key := least(v_me::text, other_user::text) || ':' || greatest(v_me::text, other_user::text);
+
+  insert into public.conversations (dm_key) values (v_key)
+  on conflict (dm_key) do nothing
+  returning id into v_conv;
+
+  if v_conv is null then
+    select c.id into v_conv from public.conversations c where c.dm_key = v_key;
+  else
+    insert into public.conversation_members (conversation_id, user_id)
+    values (v_conv, v_me), (v_conv, other_user);
+  end if;
+
+  return v_conv;
+end;
+$$;
+
+create or replace function public.mark_conversation_read(conv uuid)
+returns void
+language sql
+volatile
+security invoker
+set search_path = ''
+as $$
+  update public.conversation_members
+  set last_read_at = now()
+  where conversation_id = conv and user_id = (select auth.uid());
+$$;
+
+create or replace function public.my_conversations(
+  before_last_at timestamptz default null,
+  before_id      uuid        default null,
+  page_size      integer     default 30
+)
+returns table (
+  conversation_id    uuid,
+  other_id           uuid,
+  other_username     text,
+  other_display_name text,
+  other_avatar_path  text,
+  last_body          text,
+  last_sender_id     uuid,
+  last_at            timestamptz,
+  unread             boolean
+)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select
+    mine.conversation_id,
+    p.id, p.username, p.display_name, p.avatar_path,
+    lm.body, lm.sender_id, lm.created_at,
+    lm.sender_id <> mine.user_id and lm.created_at > mine.last_read_at
+  from public.conversation_members mine
+  join public.conversations c
+    on c.id = mine.conversation_id and c.dm_key is not null
+  join public.conversation_members other
+    on other.conversation_id = mine.conversation_id and other.user_id <> mine.user_id
+  join public.profiles p on p.id = other.user_id
+  cross join lateral (
+    select m.body, m.sender_id, m.created_at
+    from public.messages m
+    where m.conversation_id = mine.conversation_id
+    order by m.created_at desc, m.id desc
+    limit 1
+  ) lm
+  where mine.user_id = (select auth.uid())
+    and (before_last_at is null
+         or (lm.created_at, mine.conversation_id) < (before_last_at, before_id))
+  order by lm.created_at desc, mine.conversation_id desc
+  limit least(greatest(page_size, 1), 50);
+$$;
+
+revoke execute on function public.is_conversation_member(uuid)                  from public, anon;
+revoke execute on function public.get_or_create_dm(uuid)                        from public, anon;
+revoke execute on function public.mark_conversation_read(uuid)                  from public, anon;
+revoke execute on function public.my_conversations(timestamptz, uuid, integer)  from public, anon;
+grant execute on function public.is_conversation_member(uuid)                  to authenticated;
+grant execute on function public.get_or_create_dm(uuid)                        to authenticated;
+grant execute on function public.mark_conversation_read(uuid)                  to authenticated;
+grant execute on function public.my_conversations(timestamptz, uuid, integer)  to authenticated;
+
+alter publication supabase_realtime add table public.messages;
