@@ -1,9 +1,8 @@
-import { useLastNotificationResponse } from 'expo-notifications';
-import { useRouter } from 'expo-router';
 import { Tabs } from 'expo-router/js-tabs';
 import { useEffect } from 'react';
 import { ColorValue, Text } from 'react-native';
-import { conversationFromResponse, registerForPush } from '../../lib/push';
+import { registerForPush } from '../../lib/push';
+import { useOpenChatFromNotification } from '../../lib/useOpenChatFromNotification';
 import { useUnreadCount } from '../../lib/unread';
 import { useAuth } from '../../providers/AuthProvider';
 
@@ -17,7 +16,6 @@ function icon(glyph: string) {
 // necesita sesión y dura toda la app: notificaciones y el globo de no leídos.
 export default function TabsLayout() {
   const { session } = useAuth();
-  const router = useRouter();
   const userId = session?.user.id;
   const unread = useUnreadCount(!!userId);
 
@@ -28,13 +26,8 @@ export default function TabsLayout() {
     if (userId) registerForPush();
   }, [userId]);
 
-  // Tocar una notificación (con la app abierta, en segundo plano o cerrada)
-  // abre esa conversación
-  const response = useLastNotificationResponse();
-  useEffect(() => {
-    const conversationId = conversationFromResponse(response);
-    if (conversationId) router.push({ pathname: '/chat/[id]', params: { id: conversationId } });
-  }, [response]);
+  // Tocar una notificación abre esa conversación (en web no hace nada)
+  useOpenChatFromNotification();
 
   return (
     <Tabs screenOptions={{ tabBarActiveTintColor: '#111' }}>

@@ -9,7 +9,7 @@ import { supabase } from './supabase';
 // Cómo funciona de punta a punta:
 //   1. La app pide permiso y Expo le da un "push token" (la dirección de
 //      este móvil). Se guarda en la tabla push_tokens (migración 008).
-//   2. Cuando alguien manda un mensaje, un Database Webhook llama a la Edge
+//   2. Cuando alguien manda un mensaje, un trigger (migración 009) llama a la Edge
 //      Function notify-message, que busca los tokens del destinatario y
 //      le pide al servicio de Expo que mande la notificación.
 //   3. Expo la reenvía a Apple (APNs) o Google (FCM), que la entregan.

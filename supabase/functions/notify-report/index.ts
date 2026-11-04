@@ -3,8 +3,8 @@
 // Por qué: Apple pide actuar sobre las denuncias en 24 h. Sin aviso
 // tendrías que entrar al panel cada día a mirar la tabla reports.
 //
-// Cómo se dispara: un Database Webhook de Supabase (Database > Webhooks)
-// sobre INSERT en public.reports llama a esta función con la fila nueva.
+// Cómo se dispara: el trigger reports_notify (migración 009) llama a esta
+// función con la fila nueva en cada INSERT en public.reports.
 //
 // Privacidad: el mensaje NO lleva el contenido denunciado ni los detalles
 // que escribió quien denuncia (pueden ser mensajes privados), solo el tipo

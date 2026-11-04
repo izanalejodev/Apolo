@@ -984,3 +984,68 @@ select cron.schedule(
   '30 3 * * *',
   $$ delete from public.reports where created_at < now() - interval '12 months' $$
 );
+
+
+-- ---------------------------------------------------------------------
+-- LLAMADAS A EDGE FUNCTIONS (migración 009): triggers con pg_net en vez de
+-- los Database Webhooks del panel. Leen project_url y webhook_secret de
+-- Vault (se crean a mano, ver la cabecera de la migración 009).
+-- ---------------------------------------------------------------------
+create extension if not exists pg_net;
+
+-- Función genérica: el nombre de la Edge Function llega como argumento del
+-- trigger (TG_ARGV[0]). Manda el mismo formato que los webhooks del panel
+-- ({ type, table, schema, record, old_record }), que es lo que esperan las
+-- funciones.
+--
+-- security definer: el trigger se ejecuta como quien inserta (un usuario
+-- normal), que no puede leer Vault ni usar pg_net. Así lo hace como el
+-- dueño de la función. No tiene riesgo: una función de trigger no se
+-- puede llamar directamente, solo la dispara el insert.
+create or replace function public.call_edge_function()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_url    text;
+  v_secret text;
+begin
+  select decrypted_secret into v_url    from vault.decrypted_secrets where name = 'project_url';
+  select decrypted_secret into v_secret from vault.decrypted_secrets where name = 'webhook_secret';
+
+  -- Sin secretos no se llama, pero el insert sigue adelante
+  if v_url is null or v_secret is null then
+    raise warning 'Faltan project_url o webhook_secret en Vault: no se llama a %', tg_argv[0];
+    return new;
+  end if;
+
+  perform net.http_post(
+    url     := rtrim(v_url, '/') || '/functions/v1/' || tg_argv[0],
+    body    := jsonb_build_object(
+                 'type', tg_op,
+                 'table', tg_table_name,
+                 'schema', tg_table_schema,
+                 'record', to_jsonb(new),
+                 'old_record', null),
+    headers := jsonb_build_object(
+                 'Content-Type', 'application/json',
+                 'x-webhook-secret', v_secret),
+    timeout_milliseconds := 5000
+  );
+  return new;
+end;
+$$;
+
+revoke execute on function public.call_edge_function() from public, anon, authenticated;
+
+drop trigger if exists messages_notify on public.messages;
+create trigger messages_notify
+  after insert on public.messages
+  for each row execute function public.call_edge_function('notify-message');
+
+drop trigger if exists reports_notify on public.reports;
+create trigger reports_notify
+  after insert on public.reports
+  for each row execute function public.call_edge_function('notify-report');

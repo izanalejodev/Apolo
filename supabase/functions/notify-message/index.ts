@@ -1,7 +1,7 @@
 // Edge Function: manda una notificación push a quien recibe un mensaje.
 //
-// Cómo se dispara: un Database Webhook (Database > Webhooks) sobre INSERT
-// en public.messages llama a esta función con la fila nueva. Igual que
+// Cómo se dispara: el trigger messages_notify (migración 009) llama a esta
+// función con la fila nueva en cada INSERT en public.messages. Igual que
 // notify-report.
 //
 // Qué hace:
