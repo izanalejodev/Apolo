@@ -222,3 +222,41 @@ create policy comments_delete on public.comments
 
 revoke insert, update on public.comments from authenticated, anon;
 grant insert (post_id, author_id, body) on public.comments to authenticated;
+
+
+-- ---------------------------------------------------------------------
+-- FEED: posts míos y de a quien sigo, más recientes primero (migración 002)
+-- Paginación por cursor: la app pasa created_at e id del último post.
+-- security invoker -> las políticas RLS se siguen aplicando.
+-- ---------------------------------------------------------------------
+create or replace function public.feed(
+  before_created_at timestamptz default null,
+  before_id         uuid        default null,
+  page_size         integer     default 20
+)
+returns setof public.posts
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select p.*
+  from public.posts p
+  where (
+      p.author_id = (select auth.uid())
+      or exists (
+        select 1 from public.follows f
+        where f.follower_id = (select auth.uid())
+          and f.followed_id = p.author_id
+      )
+    )
+    and (
+      before_created_at is null
+      or (p.created_at, p.id) < (before_created_at, before_id)
+    )
+  order by p.created_at desc, p.id desc
+  limit least(greatest(page_size, 1), 50);
+$$;
+
+revoke execute on function public.feed(timestamptz, uuid, integer) from public, anon;
+grant execute on function public.feed(timestamptz, uuid, integer) to authenticated;

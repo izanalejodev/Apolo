@@ -27,7 +27,10 @@ Origen: el desarrollador es bailarín de baile urbano y parte de la idea de que 
 - `providers/AuthProvider.tsx`: sesión (`useAuth()` devuelve `session` y `loading`)
 - `app/_layout.tsx`: AuthGate, redirige a login si no hay sesión
 - `app/(auth)/login.tsx`: registro e inicio de sesión
-- `app/index.tsx`: mi perfil (provisional como pantalla principal); `app/edit-profile.tsx`: editarlo
+- `app/(tabs)/`: pestañas inferiores: `index.tsx` (feed), `search.tsx` (buscar por @usuario/nombre, provisional hasta el paso 4) y `profile.tsx` (mi perfil); `app/edit-profile.tsx`: editarlo
+- `app/user/[id].tsx`: perfil de otro con botón Seguir (optimista); `app/follow-list.tsx?userId&kind`: seguidores/seguidos
+- `lib/follows.ts`: seguir, dejar de seguir y listas; `components/ProfileHeader.tsx` se comparte entre mi perfil y el de otros
+- Feed: función SQL `public.feed()` (migración 002), paginación por cursor `(created_at, id)`; se llama con `rpc('feed').select(...)` para traer el autor en la misma petición
 - `lib/profile.ts`: tipo `Profile`, lista cerrada de disciplinas, límites y consultas del perfil
 - `lib/alert.ts`: `showAlert`/`confirmAction`; usar siempre estos en vez de `Alert.alert` (que no hace nada en web)
 - `supabase/schema.sql`: foto del esquema actual (tablas, enums, RLS, grants por columna). Solo para montar un proyecto nuevo desde cero
@@ -54,7 +57,7 @@ Origen: el desarrollador es bailarín de baile urbano y parte de la idea de que 
 
 1. ~~Pantalla de perfil: ver/editar y botón de cerrar sesión~~ (hecho)
 2. Publicar foto/vídeo: ~~fotos y avatar (Supabase Storage)~~ hecho; falta vídeo (decidir Mux vs Cloudflare Stream). Pendiente: pantalla de detalle de publicación (ahora se borra con pulsación larga en la cuadrícula) y paginación (ahora límite de 60)
-3. Seguir a otros y feed
+3. ~~Seguir a otros y feed~~ (hecho). Pendiente: guardar ancho/alto de la foto en `posts` para no recortarla en el feed
 4. Explorar y búsqueda con filtros
 5. Likes y comentarios
 6. Chat (tablas conversations, conversation_members, messages + Realtime)

@@ -33,7 +33,10 @@ function AuthGate() {
   return (
     <Stack>
       <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
-      <Stack.Screen name="index" options={{ title: 'Mi perfil' }} />
+      {/* Las pestañas tienen su propia cabecera: la del Stack, oculta */}
+      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+      <Stack.Screen name="user/[id]" options={{ title: 'Perfil' }} />
+      <Stack.Screen name="follow-list" options={{ title: '' }} />
       <Stack.Screen name="edit-profile" options={{ title: 'Editar perfil' }} />
       <Stack.Screen name="new-post" options={{ title: 'Nueva publicación' }} />
     </Stack>
