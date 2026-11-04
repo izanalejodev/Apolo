@@ -16,6 +16,7 @@ import { Avatar } from '../../components/Avatar';
 import { FeedItem } from '../../components/FeedItem';
 import { confirmAction, showAlert } from '../../lib/alert';
 import { COMMENTS_PAGE_SIZE, COMMENT_MAX, Comment, addComment, deleteComment, fetchComments } from '../../lib/comments';
+import { patchPostStats } from '../../lib/postStats';
 import { FeedPost, deletePost, fetchPost, timeAgo } from '../../lib/posts';
 import { usePagedList } from '../../lib/usePagedList';
 import { useAuth } from '../../providers/AuthProvider';
@@ -68,7 +69,8 @@ export default function PostScreen() {
       // la fecha reales para poder borrarlo y paginar bien. Va arriba del
       // todo porque la lista está ordenada de más nuevo a más antiguo.
       comments.update((list) => [created, ...list]);
-      setPost((p) => p && { ...p, comment_count: p.comment_count + 1 });
+      // En el almacén compartido: así el contador del feed también cambia
+      patchPostStats(post.id, (s) => ({ ...s, commentCount: s.commentCount + 1 }));
       setText('');
     } catch (e: any) {
       showAlert('No se pudo comentar', e.message);
@@ -82,7 +84,7 @@ export default function PostScreen() {
       try {
         await deleteComment(c.id);
         comments.update((list) => list.filter((x) => x.id !== c.id));
-        setPost((p) => p && { ...p, comment_count: Math.max(0, p.comment_count - 1) });
+        patchPostStats(c.post_id, (s) => ({ ...s, commentCount: Math.max(0, s.commentCount - 1) }));
       } catch (e: any) {
         showAlert('No se pudo borrar', e.message);
       }

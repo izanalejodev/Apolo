@@ -136,7 +136,7 @@ export async function fetchProfileCounts(id: string) {
 // Sube el avatar nuevo, lo guarda en el perfil y borra el anterior.
 // Se guarda al momento (sin esperar al botón "Guardar"), como en Instagram.
 export async function changeAvatar(userId: string, image: PickedImage, oldPath: string | null) {
-  const uri = await prepareImage(image, 400); // se ve pequeño: 400 px sobran
+  const { uri } = await prepareImage(image, 400); // se ve pequeño: 400 px sobran
   const newPath = await uploadImage('avatars', userId, uri);
 
   try {

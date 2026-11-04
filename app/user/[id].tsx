@@ -1,14 +1,15 @@
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { PostGrid } from '../../components/PostGrid';
 import { ProfileCounts, ProfileHeader, profileButtons as b } from '../../components/ProfileHeader';
 import { confirmAction, showAlert } from '../../lib/alert';
 import { openDm } from '../../lib/chat';
 import { follow, isFollowing, unfollow } from '../../lib/follows';
 import { blockUser, isBlockedByMe, unblockUser } from '../../lib/moderation';
-import { Post, fetchUserPosts } from '../../lib/posts';
+import { Post, USER_POSTS_PAGE_SIZE, fetchUserPosts } from '../../lib/posts';
 import { Profile, fetchProfile, fetchProfileCounts } from '../../lib/profile';
+import { usePagedList } from '../../lib/usePagedList';
 import { useAuth } from '../../providers/AuthProvider';
 
 // Perfil de otra persona: lo mismo que el mío, pero con botones de seguir y
@@ -21,36 +22,37 @@ export default function UserProfileScreen() {
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [counts, setCounts] = useState<ProfileCounts | null>(null);
-  const [posts, setPosts] = useState<Post[]>([]);
   const [following, setFollowing] = useState(false);
   const [blocked, setBlocked] = useState(false); // ¿lo he bloqueado yo?
   const [busy, setBusy] = useState(false);
   const [openingChat, setOpeningChat] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Si hay bloqueo, RLS devuelve 0 publicaciones
+  const posts = usePagedList<Post>({
+    fetchPage: (last) => fetchUserPosts(id, last),
+    pageSize: USER_POSTS_PAGE_SIZE,
+    keyOf: (p) => p.id,
+  });
+  const { reload: reloadPosts } = posts;
+
   // isActive: para no tocar el estado si ya hemos salido de la pantalla
   const load = useCallback(
     (isActive: () => boolean = () => true) => {
       if (!me || !id) return;
-      Promise.all([
-        fetchProfile(id),
-        fetchProfileCounts(id),
-        fetchUserPosts(id), // si hay bloqueo, RLS devuelve 0 publicaciones
-        isFollowing(me, id),
-        isBlockedByMe(me, id),
-      ])
-        .then(([p, c, ps, f, bl]) => {
+      reloadPosts(); // la cuadrícula va aparte: tiene su propia paginación
+      Promise.all([fetchProfile(id), fetchProfileCounts(id), isFollowing(me, id), isBlockedByMe(me, id)])
+        .then(([p, c, f, bl]) => {
           if (!isActive()) return;
           setProfile(p);
           setCounts(c);
-          setPosts(ps);
           setFollowing(f);
           setBlocked(bl);
           setError(null);
         })
         .catch((e) => isActive() && setError(e.message));
     },
-    [id, me]
+    [id, me, reloadPosts]
   );
 
   useFocusEffect(
@@ -160,59 +162,63 @@ export default function UserProfileScreen() {
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.container}>
-      <Stack.Screen options={{ title: `@${profile.username}` }} />
-      <ProfileHeader
-        profile={profile}
-        counts={counts}
-        onPressFollowers={() => openList('followers')}
-        onPressFollowing={() => openList('following')}
-      >
-        {blocked ? (
-          <Pressable style={[b.button, b.buttonLight]} onPress={unblock}>
-            <Text style={[b.buttonText, b.buttonTextDark]}>Desbloquear</Text>
-          </Pressable>
-        ) : (
-          <View style={styles.buttons}>
-            {/* Siguiendo = botón claro (ya está hecho); Seguir = oscuro (acción) */}
-            <Pressable style={[b.button, styles.flex, following && b.buttonLight]} onPress={toggleFollow}>
-              <Text style={[b.buttonText, following && b.buttonTextDark]}>
-                {following ? 'Siguiendo' : 'Seguir'}
-              </Text>
+    <PostGrid
+      list={posts}
+      hidden={blocked}
+      header={
+        <>
+          <Stack.Screen options={{ title: `@${profile.username}` }} />
+          <ProfileHeader
+            profile={profile}
+            counts={counts}
+            onPressFollowers={() => openList('followers')}
+            onPressFollowing={() => openList('following')}
+          >
+            {blocked ? (
+              <Pressable style={[b.button, b.buttonLight]} onPress={unblock}>
+                <Text style={[b.buttonText, b.buttonTextDark]}>Desbloquear</Text>
+              </Pressable>
+            ) : (
+              <View style={styles.buttons}>
+                {/* Siguiendo = botón claro (ya está hecho); Seguir = oscuro (acción) */}
+                <Pressable style={[b.button, styles.flex, following && b.buttonLight]} onPress={toggleFollow}>
+                  <Text style={[b.buttonText, following && b.buttonTextDark]}>
+                    {following ? 'Siguiendo' : 'Seguir'}
+                  </Text>
+                </Pressable>
+                <Pressable style={[b.button, b.buttonLight, styles.flex]} onPress={startChat} disabled={openingChat}>
+                  <Text style={[b.buttonText, b.buttonTextDark]}>{openingChat ? '…' : 'Mensaje'}</Text>
+                </Pressable>
+              </View>
+            )}
+          </ProfileHeader>
+          {blocked && (
+            <Text style={[styles.muted, styles.blockedNote]}>Has bloqueado a esta cuenta.</Text>
+          )}
+        </>
+      }
+      footer={
+        <View style={styles.footer}>
+          {!blocked && (
+            <Pressable onPress={confirmBlock} hitSlop={8}>
+              <Text style={styles.danger}>Bloquear</Text>
             </Pressable>
-            <Pressable style={[b.button, b.buttonLight, styles.flex]} onPress={startChat} disabled={openingChat}>
-              <Text style={[b.buttonText, b.buttonTextDark]}>{openingChat ? '…' : 'Mensaje'}</Text>
-            </Pressable>
-          </View>
-        )}
-      </ProfileHeader>
-
-      {blocked ? (
-        <Text style={[styles.muted, { textAlign: 'center' }]}>Has bloqueado a esta cuenta.</Text>
-      ) : (
-        <PostGrid posts={posts} />
-      )}
-
-      <View style={styles.footer}>
-        {!blocked && (
-          <Pressable onPress={confirmBlock} hitSlop={8}>
-            <Text style={styles.danger}>Bloquear</Text>
+          )}
+          <Pressable onPress={report} hitSlop={8}>
+            <Text style={styles.danger}>Denunciar perfil</Text>
           </Pressable>
-        )}
-        <Pressable onPress={report} hitSlop={8}>
-          <Text style={styles.danger}>Denunciar perfil</Text>
-        </Pressable>
-      </View>
-    </ScrollView>
+        </View>
+      }
+    />
   );
 }
 
 const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  container: { padding: 24, gap: 14 },
   muted: { color: '#666' },
   buttons: { flexDirection: 'row', gap: 10 },
   flex: { flex: 1 },
   footer: { flexDirection: 'row', justifyContent: 'center', gap: 24, marginTop: 8, padding: 8 },
   danger: { color: '#c00' },
+  blockedNote: { textAlign: 'center', marginTop: 14 },
 });

@@ -3,7 +3,8 @@ import { memo } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLike } from '../lib/likes';
 import { publicUrl } from '../lib/media';
-import { FeedPost, timeAgo } from '../lib/posts';
+import { usePostStats } from '../lib/postStats';
+import { FeedPost, feedAspectRatio, timeAgo } from '../lib/posts';
 import { useAuth } from '../providers/AuthProvider';
 import { Avatar } from './Avatar';
 
@@ -23,12 +24,15 @@ export const FeedItem = memo(function FeedItem({
 }) {
   const router = useRouter();
   const { session } = useAuth();
-  const heart = useLike(session?.user.id, post.id, { liked: post.liked_by_me, count: post.like_count });
+  const heart = useLike(session?.user.id, post);
+  // Mismo almacén que el corazón: si comentas en el detalle, aquí se ve
+  const { commentCount } = usePostStats(post);
   const name = post.author.display_name || post.author.username;
   const openAuthor = () => router.push({ pathname: '/user/[id]', params: { id: post.author_id } });
   const openDetail = inDetail
     ? undefined
     : () => router.push({ pathname: '/post/[id]', params: { id: post.id } });
+  const openLikers = () => router.push({ pathname: '/likes', params: { postId: post.id } });
 
   return (
     <View style={styles.item}>
@@ -40,18 +44,28 @@ export const FeedItem = memo(function FeedItem({
         </View>
       </Pressable>
 
-      {/* Cuadrada y recortada: no guardamos el ancho/alto de la foto, así que
-          no sabemos su proporción antes de descargarla. Ver notas. */}
-      <Image source={{ uri: publicUrl('posts', post.media_path) }} style={styles.image} />
+      {/* Con la proporción guardada al publicar (width/height), así el hueco
+          ya tiene su tamaño antes de que llegue la foto y no hay saltos.
+          Las publicaciones antiguas, sin tamaño, salen cuadradas. */}
+      <Image
+        source={{ uri: publicUrl('posts', post.media_path) }}
+        style={[styles.image, { aspectRatio: feedAspectRatio(post) }]}
+        resizeMode="cover"
+      />
 
       <View style={styles.actions}>
-        <Pressable style={styles.action} onPress={heart.toggle} hitSlop={8}>
-          <Text style={[styles.icon, heart.liked && styles.liked]}>{heart.liked ? '♥' : '♡'}</Text>
-          <Text style={styles.count}>{heart.count}</Text>
-        </Pressable>
+        {/* El corazón da like; el número abre quién lo ha dado (como Instagram) */}
+        <View style={styles.action}>
+          <Pressable onPress={heart.toggle} hitSlop={8}>
+            <Text style={[styles.icon, heart.liked && styles.liked]}>{heart.liked ? '♥' : '♡'}</Text>
+          </Pressable>
+          <Pressable onPress={openLikers} disabled={heart.count === 0} hitSlop={8}>
+            <Text style={styles.count}>{heart.count}</Text>
+          </Pressable>
+        </View>
         <Pressable style={styles.action} onPress={openDetail} disabled={!openDetail} hitSlop={8}>
           <Text style={styles.icon}>💬</Text>
-          <Text style={styles.count}>{post.comment_count}</Text>
+          <Text style={styles.count}>{commentCount}</Text>
         </Pressable>
       </View>
 
@@ -70,7 +84,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 8 },
   name: { fontSize: 15, fontWeight: '600' },
   muted: { color: '#666', fontSize: 12 },
-  image: { width: '100%', aspectRatio: 1, backgroundColor: '#eee' },
+  image: { width: '100%', backgroundColor: '#eee' },
   actions: { flexDirection: 'row', gap: 18, paddingHorizontal: 12, paddingTop: 8 },
   action: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   icon: { fontSize: 22 },

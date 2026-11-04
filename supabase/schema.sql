@@ -213,10 +213,15 @@ create table public.posts (
   media_type       public.media_kind not null,
   duration_seconds integer check (duration_seconds is null or duration_seconds <= 60),
   tags             text[] not null default '{}',
+  -- Tamaño de la foto (migración 008), para pintarla sin recortar. Null en
+  -- las publicaciones anteriores
+  width            integer check (width  is null or width  between 1 and 10000),
+  height           integer check (height is null or height between 1 and 10000),
   created_at       timestamptz not null default now(),
 
   constraint posts_video_has_duration check ((media_type = 'video') = (duration_seconds is not null)),
-  constraint posts_tags_limites       check (cardinality(tags) <= 30)
+  constraint posts_tags_limites       check (cardinality(tags) <= 30),
+  constraint posts_dimensiones_juntas check ((width is null) = (height is null))
 );
 
 -- Perfil y feed cronológico: "posts de X ordenados por fecha"
@@ -247,7 +252,7 @@ create policy posts_delete on public.posts
 
 -- Al publicar no se puede elegir id ni created_at; al editar, solo el texto
 revoke insert, update on public.posts from authenticated, anon;
-grant insert (author_id, caption, media_path, media_type, duration_seconds, tags)
+grant insert (author_id, caption, media_path, media_type, duration_seconds, tags, width, height)
   on public.posts to authenticated;
 grant update (caption, tags) on public.posts to authenticated;
 
@@ -290,7 +295,8 @@ create table public.likes (
   primary key (user_id, post_id)
 );
 
-create index likes_post_idx on public.likes (post_id);
+-- Contar likes y listar quién los dio, más recientes primero (migración 008)
+create index likes_post_created_idx on public.likes (post_id, created_at desc, user_id desc);
 
 alter table public.likes enable row level security;
 
@@ -389,6 +395,41 @@ revoke execute on function public.liked_by_me(public.posts)   from public, anon;
 grant execute on function public.like_count(public.posts)    to authenticated;
 grant execute on function public.comment_count(public.posts) to authenticated;
 grant execute on function public.liked_by_me(public.posts)   to authenticated;
+
+-- Quién ha dado like (migración 008). Sin las cuentas bloqueadas; el join
+-- con posts pasa por su RLS
+create or replace function public.post_likers(
+  target_post       uuid,
+  before_created_at timestamptz default null,
+  before_user       uuid        default null,
+  page_size         integer     default 30
+)
+returns table (
+  id           uuid,
+  username     text,
+  display_name text,
+  avatar_path  text,
+  liked_at     timestamptz
+)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select pr.id, pr.username, pr.display_name, pr.avatar_path, l.created_at
+  from public.likes l
+  join public.posts po on po.id = l.post_id
+  join public.profiles pr on pr.id = l.user_id
+  where l.post_id = target_post
+    and not public.is_blocked_with(l.user_id)
+    and (before_created_at is null
+         or (l.created_at, l.user_id) < (before_created_at, before_user))
+  order by l.created_at desc, l.user_id desc
+  limit least(greatest(page_size, 1), 50);
+$$;
+
+revoke execute on function public.post_likers(uuid, timestamptz, uuid, integer) from public, anon;
+grant execute on function public.post_likers(uuid, timestamptz, uuid, integer) to authenticated;
 
 
 -- ---------------------------------------------------------------------
@@ -753,6 +794,75 @@ grant execute on function public.get_or_create_dm(uuid)                        t
 grant execute on function public.mark_conversation_read(uuid)                  to authenticated;
 grant execute on function public.my_conversations(timestamptz, uuid, integer)  to authenticated;
 
+-- Conversaciones con algo sin leer, para el globo de la pestaña (migración 008)
+create or replace function public.unread_conversations_count()
+returns integer
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select count(*)::integer
+  from public.conversation_members mine
+  where mine.user_id = (select auth.uid())
+    and exists (
+      select 1 from public.messages m
+      where m.conversation_id = mine.conversation_id
+        and m.sender_id <> mine.user_id
+        and m.created_at > mine.last_read_at
+    );
+$$;
+
+revoke execute on function public.unread_conversations_count() from public, anon;
+grant execute on function public.unread_conversations_count() to authenticated;
+
+
+-- ---------------------------------------------------------------------
+-- PUSH_TOKENS (migración 008): un token por móvil, de una sola cuenta a la
+-- vez. Se registra con register_push_token(); la app lee y borra los suyos.
+-- Las notificaciones las manda la Edge Function notify-message.
+-- ---------------------------------------------------------------------
+create table public.push_tokens (
+  token      text primary key check (char_length(token) between 10 and 300),
+  user_id    uuid not null references public.profiles (id) on delete cascade,
+  platform   text not null check (platform in ('ios', 'android')),
+  updated_at timestamptz not null default now()
+);
+
+create index push_tokens_user_idx on public.push_tokens (user_id);
+
+alter table public.push_tokens enable row level security;
+
+create policy push_tokens_select on public.push_tokens
+  for select to authenticated using ((select auth.uid()) = user_id);
+create policy push_tokens_delete on public.push_tokens
+  for delete to authenticated using ((select auth.uid()) = user_id);
+
+revoke insert, update on public.push_tokens from authenticated, anon;
+
+create or replace function public.register_push_token(p_token text, p_platform text)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  v_me uuid := (select auth.uid());
+begin
+  if v_me is null then
+    raise exception 'Hace falta iniciar sesión';
+  end if;
+  insert into public.push_tokens (token, user_id, platform)
+  values (p_token, v_me, p_platform)
+  on conflict (token) do update
+    set user_id = excluded.user_id, platform = excluded.platform, updated_at = now();
+end;
+$$;
+
+revoke execute on function public.register_push_token(text, text) from public, anon;
+grant execute on function public.register_push_token(text, text) to authenticated;
+
 alter publication supabase_realtime add table public.messages;
 
 
@@ -862,3 +972,15 @@ $$;
 
 revoke execute on function public.report_content(public.report_target_kind, uuid, public.report_reason, text) from public, anon;
 grant execute on function public.report_content(public.report_target_kind, uuid, public.report_reason, text) to authenticated;
+
+
+-- ---------------------------------------------------------------------
+-- LIMPIEZA PROGRAMADA (migración 008): denuncias de más de 12 meses
+-- ---------------------------------------------------------------------
+create extension if not exists pg_cron with schema pg_catalog;
+
+select cron.schedule(
+  'borrar-denuncias-viejas',
+  '30 3 * * *',
+  $$ delete from public.reports where created_at < now() - interval '12 months' $$
+);

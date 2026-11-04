@@ -1,5 +1,6 @@
 import { Session } from '@supabase/supabase-js';
 import { ReactNode, createContext, useContext, useEffect, useState } from 'react';
+import { clearPostStats } from '../lib/postStats';
 import { supabase } from '../lib/supabase';
 
 type AuthState = {
@@ -21,8 +22,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     // 2) Después: escuchar login, logout y renovaciones de token
-    const { data } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    const { data } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
+      // Los "le he dado like" en memoria son de la cuenta que sale
+      if (event === 'SIGNED_OUT') clearPostStats();
     });
 
     return () => data.subscription.unsubscribe();

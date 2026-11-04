@@ -1,5 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef } from 'react';
 import { showAlert } from './alert';
+import { patchPostStats, usePostStats } from './postStats';
+import type { FeedPost } from './posts';
+import { ProfileSummary } from './profile';
 import { supabase } from './supabase';
 
 // Un like = una fila (user_id, post_id) en likes. Igual que follows: la PK
@@ -16,35 +19,47 @@ export async function unlike(me: string, postId: string) {
   if (error) throw error;
 }
 
-type LikeState = { liked: boolean; count: number };
-
-// Estado del corazón de un post, con actualización optimista (como el botón
-// Seguir): cambia al instante y, si la BD falla, vuelve atrás.
+// Corazón de un post, con actualización optimista (como el botón Seguir):
+// cambia al instante y, si la BD falla, vuelve atrás.
 //
-// Parte de lo que trajo el servidor (initial). Si llega un dato nuevo del
-// servidor (al refrescar el feed) se usa ese; mientras no, manda lo local.
-export function useLike(me: string | undefined, postId: string, initial: LikeState) {
-  const [state, setState] = useState(initial);
+// El estado no vive aquí sino en lib/postStats.ts, compartido por toda la
+// app: así un like dado en el detalle ya sale en el feed al volver.
+export function useLike(me: string | undefined, post: FeedPost) {
+  const stats = usePostStats(post);
   const busy = useRef(false);
-
-  useEffect(() => {
-    setState(initial);
-  }, [postId, initial.liked, initial.count]);
 
   async function toggle() {
     if (!me || busy.current) return; // busy: un toque a la vez
-    const next = !state.liked;
+    const next = !stats.liked;
+    const apply = (on: boolean) =>
+      patchPostStats(post.id, (s) => ({ ...s, liked: on, likeCount: Math.max(0, s.likeCount + (on ? 1 : -1)) }));
     busy.current = true;
-    setState((s) => ({ liked: next, count: s.count + (next ? 1 : -1) }));
+    apply(next);
     try {
-      await (next ? like(me, postId) : unlike(me, postId));
+      await (next ? like(me, post.id) : unlike(me, post.id));
     } catch (e: any) {
-      setState((s) => ({ liked: !next, count: s.count + (next ? -1 : 1) }));
+      apply(!next);
       showAlert('No se pudo guardar el me gusta', e.message);
     } finally {
       busy.current = false;
     }
   }
 
-  return { ...state, toggle };
+  return { liked: stats.liked, count: stats.likeCount, toggle };
+}
+
+// Quién ha dado like, más recientes primero (función post_likers, migración
+// 008: quita las cuentas bloqueadas)
+export type Liker = ProfileSummary & { liked_at: string };
+export const LIKERS_PAGE_SIZE = 30;
+
+export async function fetchLikers(postId: string, last: Liker | null) {
+  const { data, error } = await supabase.rpc('post_likers', {
+    target_post: postId,
+    before_created_at: last?.liked_at ?? null,
+    before_user: last?.id ?? null,
+    page_size: LIKERS_PAGE_SIZE,
+  });
+  if (error) throw error;
+  return (data ?? []) as Liker[];
 }

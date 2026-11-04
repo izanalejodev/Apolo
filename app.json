@@ -31,6 +31,12 @@
           "cameraPermission": false,
           "microphonePermission": false
         }
+      ],
+      [
+        "expo-notifications",
+        {
+          "defaultChannel": "messages"
+        }
       ]
     ],
     "experiments": {

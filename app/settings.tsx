@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { confirmAction } from '../lib/alert';
 import { APP_NAME, OWNER } from '../lib/legal';
+import { unregisterPush } from '../lib/push';
 import { supabase } from '../lib/supabase';
 
 // Ajustes: lo que no es "mi perfil" pero tiene que estar fácil de encontrar.
@@ -11,7 +12,13 @@ export default function SettingsScreen() {
   const router = useRouter();
 
   function confirmSignOut() {
-    confirmAction('Cerrar sesión', '¿Seguro que quieres salir?', 'Salir', () => supabase.auth.signOut());
+    // Primero se borra el token de notificaciones (con la sesión aún abierta,
+    // que es lo que da permiso): si no, este móvil seguiría recibiendo los
+    // mensajes de esta cuenta. Si falla (sin red), se sale igual.
+    confirmAction('Cerrar sesión', '¿Seguro que quieres salir?', 'Salir', async () => {
+      await unregisterPush().catch(() => {});
+      await supabase.auth.signOut();
+    });
   }
 
   return (

@@ -123,6 +123,17 @@ export async function sendMessage(me: string, conversationId: string, body: stri
 export async function markRead(conversationId: string) {
   const { error } = await supabase.rpc('mark_conversation_read', { conv: conversationId });
   if (error) throw error;
+  readListeners.forEach((l) => l());
+}
+
+// Avisa cuando marco algo como leído (lo usa el globo de no leídos de la
+// pestaña, lib/unread.ts). Devuelve la función para darse de baja.
+const readListeners = new Set<() => void>();
+export function onReadChange(listener: () => void) {
+  readListeners.add(listener);
+  return () => {
+    readListeners.delete(listener);
+  };
 }
 
 // Mete mensajes nuevos en la lista (más nuevo primero) sin duplicados. Un

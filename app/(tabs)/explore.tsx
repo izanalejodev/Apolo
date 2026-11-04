@@ -1,9 +1,7 @@
-import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
-  Image,
   Pressable,
   RefreshControl,
   StyleSheet,
@@ -12,6 +10,7 @@ import {
   View,
 } from 'react-native';
 import { Chip, ChipRow } from '../../components/Chip';
+import { PostTile } from '../../components/PostGrid';
 import { ProfileRow } from '../../components/ProfileRow';
 import {
   EXPLORE_POSTS_PAGE_SIZE,
@@ -23,7 +22,6 @@ import {
   fetchPopularFilters,
   searchPeople,
 } from '../../lib/explore';
-import { publicUrl } from '../../lib/media';
 import { Post } from '../../lib/posts';
 import { DISCIPLINES, disciplineLabel } from '../../lib/profile';
 import { usePagedList } from '../../lib/usePagedList';
@@ -38,7 +36,6 @@ const asOptions = (values: string[]) => values.map((v) => ({ value: v, label: v 
 // en Cádiz disponible) y publicaciones recientes de todo el mundo, con los
 // mismos filtros de ciudad, disciplina y estilo.
 export default function ExploreScreen() {
-  const router = useRouter();
   const [mode, setMode] = useState<Mode>('people');
   const [text, setText] = useState(''); // lo que se escribe
   const [query, setQuery] = useState(''); // lo que se busca (300 ms después)
@@ -187,14 +184,7 @@ export default function ExploreScreen() {
       data={posts.items ?? []}
       keyExtractor={(p) => p.id}
       numColumns={3}
-      renderItem={({ item }) => (
-        <Pressable
-          style={styles.tile}
-          onPress={() => router.push({ pathname: '/post/[id]', params: { id: item.id } })}
-        >
-          <Image source={{ uri: publicUrl('posts', item.media_path) }} style={styles.tileImage} />
-        </Pressable>
-      )}
+      renderItem={({ item }) => <PostTile post={item} />}
       ListHeaderComponent={header}
       ListEmptyComponent={empty}
       ListFooterComponent={footer}
@@ -251,6 +241,4 @@ const styles = StyleSheet.create({
   footerRow: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingHorizontal: 16 },
   clear: { color: '#0a66c2', fontSize: 14 },
   empty: { textAlign: 'center', color: '#666', padding: 24 },
-  tile: { width: '33.333%', aspectRatio: 1, padding: 1 },
-  tileImage: { flex: 1, backgroundColor: '#eee' },
 });

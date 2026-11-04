@@ -47,6 +47,7 @@ function AuthGate() {
       <Stack.Screen name="edit-profile" options={{ title: 'Editar perfil' }} />
       <Stack.Screen name="new-post" options={{ title: 'Nueva publicación' }} />
       <Stack.Screen name="post/[id]" options={{ title: 'Publicación' }} />
+      <Stack.Screen name="likes" options={{ title: 'Me gusta' }} />
       <Stack.Screen name="chat/[id]" options={{ title: '' }} />
       <Stack.Screen name="report" options={{ title: 'Denunciar', presentation: 'modal' }} />
       <Stack.Screen name="blocked" options={{ title: 'Cuentas bloqueadas' }} />

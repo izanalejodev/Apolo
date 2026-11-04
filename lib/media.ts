@@ -29,7 +29,8 @@ export async function pickImage({ square = false } = {}): Promise<PickedImage | 
 // menos datos a quien la ve y menos almacenamiento (que se paga).
 // Además, al generar un JPEG nuevo no se copian los metadatos del original
 // (como la ubicación GPS donde se hizo la foto).
-export async function prepareImage(image: PickedImage, maxSide: number) {
+// Devuelve también el tamaño final, que se guarda con la publicación.
+export async function prepareImage(image: PickedImage, maxSide: number): Promise<PickedImage> {
   const context = ImageManipulator.manipulate(image.uri);
   const longest = Math.max(image.width, image.height);
   if (!longest || longest > maxSide) {
@@ -37,7 +38,7 @@ export async function prepareImage(image: PickedImage, maxSide: number) {
   }
   const rendered = await context.renderAsync();
   const saved = await rendered.saveAsync({ format: SaveFormat.JPEG, compress: 0.8 });
-  return saved.uri;
+  return { uri: saved.uri, width: saved.width, height: saved.height };
 }
 
 // Sube un JPEG a <bucket>/<userId>/<nombre único>.jpg y devuelve esa ruta,

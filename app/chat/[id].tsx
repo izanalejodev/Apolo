@@ -27,6 +27,7 @@ import {
   subscribeToMessages,
 } from '../../lib/chat';
 import { isBlockedByMe, isRlsError, unblockUser } from '../../lib/moderation';
+import { setActiveConversation } from '../../lib/push';
 import { ProfileSummary } from '../../lib/profile';
 import { usePagedList } from '../../lib/usePagedList';
 import { useAuth } from '../../providers/AuthProvider';
@@ -65,6 +66,13 @@ export default function ChatScreen() {
       active = false;
     };
   }, [id, me]);
+
+  // Mientras este chat esté abierto, sus notificaciones no salen como aviso
+  useEffect(() => {
+    if (!id) return;
+    setActiveConversation(id);
+    return () => setActiveConversation(null);
+  }, [id]);
 
   useEffect(() => {
     if (!me || !peer) return;

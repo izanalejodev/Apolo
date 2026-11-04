@@ -104,6 +104,7 @@ export const PRIVACY: LegalDoc = {
 • Contenido: publicaciones, comentarios, likes y a quién sigues. Son visibles para los demás usuarios.
 • Mensajes privados: solo los ven los participantes de la conversación. No están cifrados de extremo a extremo; no los leemos salvo que alguien los denuncie.
 • Bloqueos y denuncias que hagas o recibas.
+• Si activas las notificaciones: un identificador del móvil para poder enviártelas. Se borra al cerrar sesión o eliminar la cuenta.
 • Datos técnicos necesarios para que funcione el servicio (registros de acceso y errores).
 
 No usamos tus datos para publicidad, no los vendemos y no hay rastreo entre apps.`,
@@ -118,6 +119,7 @@ No usamos tus datos para publicidad, no los vendemos y no hay rastreo entre apps
       heading: '4. Quién más trata tus datos',
       body: `Proveedores que nos dan la infraestructura, con contrato de encargado del tratamiento:
 • Supabase (base de datos, autenticación y almacenamiento de archivos). Servidores en [REGIÓN DEL PROYECTO, p. ej. Unión Europea (Fráncfort)].
+• Expo (servicio de notificaciones push), y Apple y Google, que las entregan en tu móvil. La notificación de un mensaje nuevo incluye el nombre de quien escribe y el principio del mensaje. Puedes desactivarlas en los ajustes del móvil.
 • Apple y Google, si usas sus tiendas para instalar la app.
 No cedemos tus datos a nadie más salvo obligación legal.`,
     },

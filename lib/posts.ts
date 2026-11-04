@@ -1,4 +1,5 @@
 import { PickedImage, prepareImage, removeFile, uploadImage } from './media';
+import { primePostStats } from './postStats';
 import { PROFILE_SUMMARY_COLUMNS, ProfileSummary } from './profile';
 import { supabase } from './supabase';
 
@@ -11,6 +12,9 @@ export type Post = {
   media_type: 'image' | 'video';
   duration_seconds: number | null;
   tags: string[];
+  // Tamaño de la foto (migración 008). null en publicaciones anteriores
+  width: number | null;
+  height: number | null;
   created_at: string;
 };
 
@@ -21,14 +25,19 @@ const POST_IMAGE_MAX_SIDE = 1440;
 // Son dos pasos que no pueden ir en una transacción (Storage no es Postgres),
 // así que si falla el segundo borramos el archivo para no dejar basura.
 export async function createImagePost(userId: string, image: PickedImage, caption: string) {
-  const uri = await prepareImage(image, POST_IMAGE_MAX_SIDE);
-  const path = await uploadImage('posts', userId, uri);
+  const prepared = await prepareImage(image, POST_IMAGE_MAX_SIDE);
+  const path = await uploadImage('posts', userId, prepared.uri);
 
+  // El tamaño se guarda para que el feed sepa la proporción antes de
+  // descargar la foto (si no, tendría que recortarla o "saltar" al cargar)
+  const sized = prepared.width > 0 && prepared.height > 0;
   const { error } = await supabase.from('posts').insert({
     author_id: userId,
     media_path: path,
     media_type: 'image',
     caption: caption.trim() || null,
+    width: sized ? Math.round(prepared.width) : null,
+    height: sized ? Math.round(prepared.height) : null,
   });
 
   if (error) {
@@ -37,18 +46,35 @@ export async function createImagePost(userId: string, image: PickedImage, captio
   }
 }
 
-// Más recientes primero. El límite evita descargar cientos de filas de golpe;
-// cuando alguien llegue a 60 publicaciones tocará paginar (scroll infinito).
-export async function fetchUserPosts(userId: string) {
-  const { data, error } = await supabase
+// Cuadrícula de un perfil: más recientes primero, de 30 en 30 (múltiplo de
+// 3, para que cada página llene filas enteras). Misma paginación por
+// (created_at, id) que los comentarios.
+export const USER_POSTS_PAGE_SIZE = 30;
+
+export async function fetchUserPosts(userId: string, last: Post | null) {
+  let query = supabase
     .from('posts')
     .select('*')
     .eq('author_id', userId)
     .order('created_at', { ascending: false })
-    .limit(60)
-    .returns<Post[]>();
+    .order('id', { ascending: false })
+    .limit(USER_POSTS_PAGE_SIZE);
+  if (last) {
+    query = query.or(
+      `created_at.lt.${last.created_at},and(created_at.eq.${last.created_at},id.lt.${last.id})`
+    );
+  }
+  const { data, error } = await query.returns<Post[]>();
   if (error) throw error;
   return data;
+}
+
+// Proporción con la que se pinta la foto en el feed. Se limita como hace
+// Instagram (entre 4:5 vertical y 1,91:1 horizontal): una foto muy alta
+// ocuparía varias pantallas. Lo que sobre se recorta un poco.
+export function feedAspectRatio(post: Pick<Post, 'width' | 'height'>) {
+  if (!post.width || !post.height) return 1;
+  return Math.min(1.91, Math.max(0.8, post.width / post.height));
 }
 
 // Post del feed (y del detalle): la fila, el autor para la cabecera y los
@@ -90,7 +116,9 @@ export async function fetchFeed(cursor: FeedCursor | null) {
   if (error) throw error;
   // Sin tipos generados del esquema, supabase-js no sabe que feed() devuelve
   // una lista de posts, así que se lo decimos nosotros.
-  return (data ?? []) as unknown as FeedPost[];
+  const posts = (data ?? []) as unknown as FeedPost[];
+  primePostStats(posts); // likes y comentarios compartidos (lib/postStats.ts)
+  return posts;
 }
 
 // Un post suelto, para la pantalla de detalle. null si no existe (o se borró)
@@ -101,6 +129,7 @@ export async function fetchPost(id: string) {
     .eq('id', id)
     .maybeSingle<FeedPost>();
   if (error) throw error;
+  if (data) primePostStats([data]);
   return data;
 }
 
