@@ -1,4 +1,18 @@
+import { PickedImage, prepareImage, removeFile, uploadImage } from './media';
 import { supabase } from './supabase';
+
+// Valores del enum availability_status de la base de datos
+export type Availability = 'available' | 'busy' | 'not_looking';
+
+export const AVAILABILITY: { key: Availability; label: string }[] = [
+  { key: 'available', label: 'Disponible para trabajos' },
+  { key: 'busy', label: 'Ocupado ahora mismo' },
+  { key: 'not_looking', label: 'No busco trabajos' },
+];
+
+export function availabilityLabel(key: Availability) {
+  return AVAILABILITY.find((a) => a.key === key)?.label ?? key;
+}
 
 // Fila de public.profiles tal como la devuelve Supabase
 export type Profile = {
@@ -6,11 +20,11 @@ export type Profile = {
   username: string;
   display_name: string | null;
   bio: string | null;
-  avatar_url: string | null;
+  avatar_path: string | null; // ruta en el bucket 'avatars'
   city: string | null;
   disciplines: string[];
   styles: string[];
-  availability: string | null;
+  availability: Availability;
   services_text: string | null;
   contact_link: string | null;
   created_at: string;
@@ -22,6 +36,7 @@ export type ProfileUpdate = Pick<
   Profile,
   | 'display_name'
   | 'bio'
+  | 'avatar_path'
   | 'city'
   | 'disciplines'
   | 'styles'
@@ -49,11 +64,10 @@ export const MAX_STYLES = 15;
 
 // Mismos límites que los CHECK de la tabla
 export const LIMITS = {
-  display_name: 50,
+  display_name: 60,
   bio: 300,
   city: 80,
-  availability: 200,
-  services_text: 1000,
+  services_text: 500,
   contact_link: 300,
 } as const;
 
@@ -93,7 +107,8 @@ export async function fetchProfile(id: string) {
   return data;
 }
 
-export async function updateProfile(id: string, changes: ProfileUpdate) {
+// Partial: se puede actualizar solo una parte (p. ej. solo el avatar)
+export async function updateProfile(id: string, changes: Partial<ProfileUpdate>) {
   const { error } = await supabase.from('profiles').update(changes).eq('id', id);
   if (error) throw error;
 }
@@ -102,7 +117,7 @@ export async function updateProfile(id: string, changes: ProfileUpdate) {
 // head: true -> no descarga filas, solo pide el número.
 export async function fetchProfileCounts(id: string) {
   const [followers, following, posts] = await Promise.all([
-    supabase.from('follows').select('*', { count: 'exact', head: true }).eq('following_id', id),
+    supabase.from('follows').select('*', { count: 'exact', head: true }).eq('followed_id', id),
     supabase.from('follows').select('*', { count: 'exact', head: true }).eq('follower_id', id),
     supabase.from('posts').select('*', { count: 'exact', head: true }).eq('author_id', id),
   ]);
@@ -111,4 +126,21 @@ export async function fetchProfileCounts(id: string) {
     following: following.count ?? 0,
     posts: posts.count ?? 0,
   };
+}
+
+// Sube el avatar nuevo, lo guarda en el perfil y borra el anterior.
+// Se guarda al momento (sin esperar al botón "Guardar"), como en Instagram.
+export async function changeAvatar(userId: string, image: PickedImage, oldPath: string | null) {
+  const uri = await prepareImage(image, 400); // se ve pequeño: 400 px sobran
+  const newPath = await uploadImage('avatars', userId, uri);
+
+  try {
+    await updateProfile(userId, { avatar_path: newPath });
+  } catch (e) {
+    await removeFile('avatars', newPath).catch(() => {});
+    throw e;
+  }
+
+  if (oldPath) await removeFile('avatars', oldPath).catch(() => {});
+  return newPath;
 }

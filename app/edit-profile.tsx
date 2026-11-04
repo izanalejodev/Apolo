@@ -12,8 +12,13 @@ import {
   TextInputProps,
   View,
 } from 'react-native';
+import { Avatar } from '../components/Avatar';
+import { pickImage } from '../lib/media';
 import {
+  AVAILABILITY,
+  Availability,
   DISCIPLINES,
+  changeAvatar,
   LIMITS,
   MAX_DISCIPLINES,
   MAX_STYLES,
@@ -40,9 +45,12 @@ export default function EditProfileScreen() {
   const [city, setCity] = useState('');
   const [disciplines, setDisciplines] = useState<string[]>([]);
   const [stylesText, setStylesText] = useState('');
-  const [availability, setAvailability] = useState('');
+  const [availability, setAvailability] = useState<Availability>('not_looking');
   const [services, setServices] = useState('');
   const [contactLink, setContactLink] = useState('');
+  const [username, setUsername] = useState('');
+  const [avatarPath, setAvatarPath] = useState<string | null>(null);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
 
   useEffect(() => {
     if (!userId) return;
@@ -53,9 +61,11 @@ export default function EditProfileScreen() {
         setCity(p.city ?? '');
         setDisciplines(p.disciplines);
         setStylesText(p.styles.join(', '));
-        setAvailability(p.availability ?? '');
+        setAvailability(p.availability);
         setServices(p.services_text ?? '');
         setContactLink(p.contact_link ?? '');
+        setUsername(p.username);
+        setAvatarPath(p.avatar_path);
         setLoaded(true);
       })
       .catch((e) => showAlert('No se pudo cargar el perfil', e.message));
@@ -70,6 +80,21 @@ export default function EditProfileScreen() {
       }
       return [...current, key];
     });
+  }
+
+  async function handleChangeAvatar() {
+    if (!userId) return;
+    const picked = await pickImage({ square: true });
+    if (!picked) return;
+
+    setUploadingAvatar(true);
+    try {
+      setAvatarPath(await changeAvatar(userId, picked, avatarPath));
+    } catch (e: any) {
+      showAlert('No se pudo cambiar la foto', e.message);
+    } finally {
+      setUploadingAvatar(false);
+    }
   }
 
   async function handleSave() {
@@ -88,7 +113,7 @@ export default function EditProfileScreen() {
         city: emptyToNull(city),
         disciplines,
         styles,
-        availability: emptyToNull(availability),
+        availability,
         services_text: emptyToNull(services),
         contact_link: normalizeLink(contactLink),
       });
@@ -115,6 +140,15 @@ export default function EditProfileScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={s.container} keyboardShouldPersistTaps="handled">
+        <Pressable onPress={handleChangeAvatar} disabled={uploadingAvatar} style={s.avatar}>
+          <Avatar path={avatarPath} name={displayName || username} size={96} />
+          {uploadingAvatar ? (
+            <ActivityIndicator />
+          ) : (
+            <Text style={s.avatarText}>Cambiar foto</Text>
+          )}
+        </Pressable>
+
         <Field label="Nombre" value={displayName} onChangeText={setDisplayName}
           maxLength={LIMITS.display_name} placeholder="Cómo quieres que te vean" />
 
@@ -143,8 +177,20 @@ export default function EditProfileScreen() {
           onChangeText={setStylesText} autoCapitalize="none"
           placeholder="hip hop, popping, house" />
 
-        <Field label="Disponibilidad" value={availability} onChangeText={setAvailability}
-          multiline maxLength={LIMITS.availability} placeholder="Fines de semana, giras en verano..." />
+        <View style={{ gap: 6 }}>
+          <Text style={s.label}>Disponibilidad</Text>
+          <View style={s.chips}>
+            {AVAILABILITY.map((a) => {
+              const on = availability === a.key;
+              return (
+                <Pressable key={a.key} onPress={() => setAvailability(a.key)}
+                  style={[s.chip, on && s.chipOn]}>
+                  <Text style={on ? { color: '#fff' } : undefined}>{a.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </View>
 
         <Field label="Servicios" value={services} onChangeText={setServices} multiline
           maxLength={LIMITS.services_text} placeholder="Clases particulares, coreografías, bolos..." />
@@ -172,6 +218,8 @@ function Field({ label, ...props }: TextInputProps & { label: string }) {
 
 const s = StyleSheet.create({
   container: { padding: 24, gap: 16 },
+  avatar: { alignItems: 'center', gap: 8 },
+  avatarText: { color: '#0a66c2' },
   label: { fontWeight: '600', color: '#333' },
   input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 10, padding: 12, fontSize: 16 },
   multiline: { minHeight: 80, textAlignVertical: 'top' },

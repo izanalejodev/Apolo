@@ -30,7 +30,12 @@ Origen: el desarrollador es bailarín de baile urbano y parte de la idea de que 
 - `app/index.tsx`: mi perfil (provisional como pantalla principal); `app/edit-profile.tsx`: editarlo
 - `lib/profile.ts`: tipo `Profile`, lista cerrada de disciplinas, límites y consultas del perfil
 - `lib/alert.ts`: `showAlert`/`confirmAction`; usar siempre estos en vez de `Alert.alert` (que no hace nada en web)
-- `supabase/schema.sql`: tablas profiles, posts, follows, likes, comments + políticas RLS
+- `supabase/schema.sql`: foto del esquema actual (tablas, enums, RLS, grants por columna). Solo para montar un proyecto nuevo desde cero
+- `supabase/migrations/NNN_*.sql`: cambios sobre la base de datos existente, se ejecutan una vez y en orden
+- `supabase/storage.sql`: buckets `avatars` y `posts` y sus políticas (archivos en `<bucket>/<user_id>/...`)
+- `lib/media.ts`: elegir, reducir y subir imágenes; en la BD se guarda la ruta (`*_path`), la URL se construye con `publicUrl`
+- `lib/posts.ts`: crear, listar y borrar publicaciones; `app/new-post.tsx`: pantalla de publicar
+- `components/`: componentes reutilizables (nunca dentro de `app/`, que son rutas)
 - `supabase/auth_trigger.sql`: trigger que crea el perfil al registrarse (el username va en `options.data.username`)
 
 ## Reglas importantes
@@ -38,6 +43,8 @@ Origen: el desarrollador es bailarín de baile urbano y parte de la idea de que 
 - En la app solo va la clave pública (publishable/anon). **Nunca** la `service_role`/secret, ni en la app ni en GitHub.
 - Variables en `.env.local` (excluido por `.gitignore`), con prefijo `EXPO_PUBLIC_`. Tras cambiarlas, `npx expo start -c`.
 - Toda tabla con RLS activado. Las reglas de quién puede qué viven en la base de datos, no en el cliente. Validar también en el servidor, no solo en la app.
+- Cambios en la base de datos: nuevo fichero en `supabase/migrations/` y, tras ejecutarlo, actualizar `schema.sql`. Nunca suponer el esquema: si hay duda, consultar `information_schema` en el SQL Editor.
+- Nombres reales a recordar: `follows.followed_id` (no following_id), `posts.duration_seconds`, enums `availability_status` y `media_kind`.
 - No guardar contadores (likes, seguidores); se calculan con `count(*)`.
 - Las disciplinas son una lista cerrada que vive en dos sitios: `DISCIPLINES` en `lib/profile.ts` y el CHECK `profiles_disciplines_validas` de `schema.sql`. Cambiar ambos a la vez. Igual con las columnas editables (`ProfileUpdate` ↔ `grant update`).
 - Antes de publicar en tiendas: confirmación de email activada (ahora desactivada para desarrollar) y tabla `reports` (denuncias), que Apple/Google exigen en apps con contenido de usuarios.
@@ -45,8 +52,8 @@ Origen: el desarrollador es bailarín de baile urbano y parte de la idea de que 
 
 ## Próximos pasos (por orden)
 
-1. ~~Pantalla de perfil: ver/editar y botón de cerrar sesión~~ (hecho; avatar pendiente para el paso 2)
-2. Publicar foto/vídeo (Supabase Storage)
+1. ~~Pantalla de perfil: ver/editar y botón de cerrar sesión~~ (hecho)
+2. Publicar foto/vídeo: ~~fotos y avatar (Supabase Storage)~~ hecho; falta vídeo (decidir Mux vs Cloudflare Stream). Pendiente: pantalla de detalle de publicación (ahora se borra con pulsación larga en la cuadrícula) y paginación (ahora límite de 60)
 3. Seguir a otros y feed
 4. Explorar y búsqueda con filtros
 5. Likes y comentarios

@@ -35,6 +35,7 @@ function AuthGate() {
       <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
       <Stack.Screen name="index" options={{ title: 'Mi perfil' }} />
       <Stack.Screen name="edit-profile" options={{ title: 'Editar perfil' }} />
+      <Stack.Screen name="new-post" options={{ title: 'Nueva publicación' }} />
     </Stack>
   );
 }
