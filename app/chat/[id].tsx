@@ -30,6 +30,7 @@ import { isBlockedByMe, isRlsError, unblockUser } from '../../lib/moderation';
 import { ProfileSummary } from '../../lib/profile';
 import { usePagedList } from '../../lib/usePagedList';
 import { useAuth } from '../../providers/AuthProvider';
+import { INPUT_COLORS } from '../../components/Field';
 
 // Un chat 1 a 1. Los mensajes van del más nuevo al más antiguo en una
 // lista invertida: el más nuevo queda abajo (como en cualquier chat) y al
@@ -220,6 +221,7 @@ export default function ChatScreen() {
         <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
           <TextInput
             style={styles.input}
+            placeholderTextColor={INPUT_COLORS.placeholder}
             value={text}
             onChangeText={setText}
             placeholder="Mensaje…"
@@ -274,6 +276,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   input: {
+    color: INPUT_COLORS.text,
     flex: 1,
     maxHeight: 120,
     borderWidth: 1,

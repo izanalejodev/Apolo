@@ -4,6 +4,7 @@ import { showAlert } from '../lib/alert';
 import { deleteMyAccount } from '../lib/account';
 import { fetchProfile } from '../lib/profile';
 import { useAuth } from '../providers/AuthProvider';
+import { INPUT_COLORS } from '../components/Field';
 
 // Eliminar la cuenta. Pantalla propia (y no un simple "¿Seguro?") porque no
 // se puede deshacer: hay que escribir el nombre de usuario para activar el
@@ -52,6 +53,7 @@ export default function DeleteAccountScreen() {
           </Text>
           <TextInput
             style={styles.input}
+            placeholderTextColor={INPUT_COLORS.placeholder}
             value={typed}
             onChangeText={setTyped}
             placeholder={username}
@@ -75,7 +77,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: '700' },
   body: { fontSize: 15, lineHeight: 22, color: '#222' },
   bold: { fontWeight: '700' },
-  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 10, padding: 14, fontSize: 16 },
+  input: { color: INPUT_COLORS.text, borderWidth: 1, borderColor: '#ccc', borderRadius: 10, padding: 14, fontSize: 16 },
   button: { backgroundColor: '#c00', borderRadius: 10, padding: 16, alignItems: 'center', marginTop: 8 },
   disabled: { opacity: 0.4 },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },

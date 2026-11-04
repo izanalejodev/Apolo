@@ -15,6 +15,7 @@ import { showAlert } from '../lib/alert';
 import { PickedImage, pickImage } from '../lib/media';
 import { CAPTION_MAX, createImagePost } from '../lib/posts';
 import { useAuth } from '../providers/AuthProvider';
+import { INPUT_COLORS } from '../components/Field';
 
 export default function NewPostScreen() {
   const { session } = useAuth();
@@ -64,6 +65,7 @@ export default function NewPostScreen() {
 
         <TextInput
           style={s.input}
+          placeholderTextColor={INPUT_COLORS.placeholder}
           placeholder="Escribe un pie de foto..."
           value={caption}
           onChangeText={setCaption}
@@ -98,6 +100,7 @@ const s = StyleSheet.create({
   },
   change: { textAlign: 'center', color: '#0a66c2' },
   input: {
+    color: INPUT_COLORS.text,
     borderWidth: 1,
     borderColor: '#ccc',
     borderRadius: 10,

@@ -27,6 +27,7 @@ import { publicUrl } from '../../lib/media';
 import { Post } from '../../lib/posts';
 import { DISCIPLINES, disciplineLabel } from '../../lib/profile';
 import { usePagedList } from '../../lib/usePagedList';
+import { INPUT_COLORS } from '../../components/Field';
 
 type Mode = 'people' | 'posts';
 
@@ -98,6 +99,7 @@ export default function ExploreScreen() {
       {mode === 'people' && (
         <TextInput
           style={styles.input}
+          placeholderTextColor={INPUT_COLORS.placeholder}
           placeholder="Buscar por @usuario o nombre"
           value={text}
           onChangeText={setText}
@@ -237,6 +239,7 @@ const styles = StyleSheet.create({
   segmentText: { fontSize: 15, fontWeight: '600', color: '#111' },
   segmentTextActive: { color: '#fff' },
   input: {
+    color: INPUT_COLORS.text,
     marginHorizontal: 16,
     borderWidth: 1,
     borderColor: '#ccc',

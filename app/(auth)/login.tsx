@@ -10,7 +10,9 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { INPUT_COLORS, inputStyle } from '../../components/Field';
 import { showAlert } from '../../lib/alert';
+import { friendlyAuthError } from '../../lib/authErrors';
 import { MIN_AGE, TERMS_VERSION } from '../../lib/legal';
 import { supabase } from '../../lib/supabase';
 
@@ -61,7 +63,7 @@ export default function LoginScreen() {
       });
 
       if (error) {
-        showAlert('No se pudo crear la cuenta', friendlyError(error.message));
+        showAlert('No se pudo crear la cuenta', friendlyAuthError(error.message));
       } else if (!data.session) {
         // Pasa cuando "Confirm email" está activado en Supabase
         showAlert(
@@ -76,7 +78,7 @@ export default function LoginScreen() {
         email: email.trim(),
         password,
       });
-      if (error) showAlert('No se pudo iniciar sesión', friendlyError(error.message));
+      if (error) showAlert('No se pudo iniciar sesión', friendlyAuthError(error.message));
     }
 
     setBusy(false);
@@ -92,6 +94,7 @@ export default function LoginScreen() {
       {isSignup && (
         <TextInput
           style={styles.input}
+          placeholderTextColor={INPUT_COLORS.placeholder}
           placeholder="Nombre de usuario"
           autoCapitalize="none"
           autoCorrect={false}
@@ -102,6 +105,7 @@ export default function LoginScreen() {
 
       <TextInput
         style={styles.input}
+        placeholderTextColor={INPUT_COLORS.placeholder}
         placeholder="Email"
         autoCapitalize="none"
         keyboardType="email-address"
@@ -111,6 +115,7 @@ export default function LoginScreen() {
 
       <TextInput
         style={styles.input}
+        placeholderTextColor={INPUT_COLORS.placeholder}
         placeholder="Contraseña"
         secureTextEntry
         autoCapitalize="none"
@@ -152,6 +157,15 @@ export default function LoginScreen() {
         )}
       </Pressable>
 
+      {!isSignup && (
+        <Pressable
+          onPress={() => router.push({ pathname: '/reset-password', params: { email: email.trim() } })}
+          disabled={busy}
+        >
+          <Text style={styles.switch}>¿Has olvidado tu contraseña?</Text>
+        </Pressable>
+      )}
+
       <Pressable onPress={() => setMode(isSignup ? 'login' : 'signup')} disabled={busy}>
         <Text style={styles.switch}>
           {isSignup ? '¿Ya tienes cuenta? Inicia sesión' : '¿No tienes cuenta? Regístrate'}
@@ -161,30 +175,10 @@ export default function LoginScreen() {
   );
 }
 
-// Traduce los errores más habituales
-function friendlyError(message: string) {
-  const m = message.toLowerCase();
-  if (m.includes('invalid login credentials')) return 'Email o contraseña incorrectos.';
-  if (m.includes('already registered')) return 'Ya existe una cuenta con ese email.';
-  if (m.includes('email not confirmed')) {
-    return 'Todavía no has confirmado tu email. Busca el enlace que te enviamos (mira también en spam).';
-  }
-  if (m.includes('database error saving new user')) {
-    return 'Ese nombre de usuario ya está cogido o no es válido.';
-  }
-  return message;
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', padding: 24, gap: 12 },
+  container: { flex: 1, justifyContent: 'center', padding: 24, gap: 12, backgroundColor: '#fff' },
   title: { fontSize: 28, fontWeight: '700', marginBottom: 12 },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ccc',
-    borderRadius: 10,
-    padding: 14,
-    fontSize: 16,
-  },
+  input: inputStyle, // colores explícitos: ver components/Field.tsx
   button: {
     backgroundColor: '#111',
     borderRadius: 10,

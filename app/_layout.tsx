@@ -16,10 +16,13 @@ function AuthGate() {
     // Términos y privacidad se leen sin sesión: hay que poder abrirlos antes
     // de registrarse, y en la web son las URL que piden las tiendas
     const isPublic = segments[0] === 'legal';
+    // Al recuperar la contraseña, verificar el código abre sesión ANTES de
+    // poner la contraseña nueva: esa pantalla decide ella cuándo entrar
+    const resettingPassword = inAuthGroup && (segments as string[])[1] === 'reset-password';
 
     if (!session && !inAuthGroup && !isPublic) {
       router.replace('/(auth)/login'); // sin sesión -> login
-    } else if (session && inAuthGroup) {
+    } else if (session && inAuthGroup && !resettingPassword) {
       router.replace('/'); // con sesión -> pantalla principal
     }
   }, [session, loading, segments]);
@@ -36,6 +39,7 @@ function AuthGate() {
   return (
     <Stack>
       <Stack.Screen name="(auth)/login" options={{ headerShown: false }} />
+      <Stack.Screen name="(auth)/reset-password" options={{ title: 'Recuperar contraseña' }} />
       {/* Las pestañas tienen su propia cabecera: la del Stack, oculta */}
       <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
       <Stack.Screen name="user/[id]" options={{ title: 'Perfil' }} />

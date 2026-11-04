@@ -10,6 +10,7 @@ import {
   ReportReason,
   reportContent,
 } from '../lib/moderation';
+import { INPUT_COLORS } from '../components/Field';
 
 const KINDS = Object.keys(REPORT_KIND_LABEL) as ReportKind[];
 
@@ -62,6 +63,7 @@ export default function ReportScreen() {
 
       <TextInput
         style={styles.input}
+        placeholderTextColor={INPUT_COLORS.placeholder}
         value={details}
         onChangeText={setDetails}
         placeholder="Cuéntanos más (opcional)"
@@ -91,6 +93,7 @@ const styles = StyleSheet.create({
   radioOn: { borderColor: '#111', backgroundColor: '#111' },
   optionText: { fontSize: 16 },
   input: {
+    color: INPUT_COLORS.text,
     minHeight: 80,
     borderWidth: 1,
     borderColor: '#ddd',

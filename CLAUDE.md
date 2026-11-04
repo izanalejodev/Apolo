@@ -26,7 +26,7 @@ Origen: el desarrollador es bailarín de baile urbano y parte de la idea de que 
 - `lib/supabase.ts`: único sitio donde se crea el cliente de Supabase
 - `providers/AuthProvider.tsx`: sesión (`useAuth()` devuelve `session` y `loading`)
 - `app/_layout.tsx`: AuthGate, redirige a login si no hay sesión
-- `app/(auth)/login.tsx`: registro e inicio de sesión
+- `app/(auth)/login.tsx`: registro e inicio de sesión; `app/(auth)/reset-password.tsx`: recuperar contraseña con un **código** por email (`resetPasswordForEmail` → `verifyOtp` tipo `recovery` → `updateUser`), no con enlace, para no depender de deep links. AuthGate no saca de esa pantalla aunque haya sesión. La plantilla del email está en `supabase/email_templates/reset_password.html` (hay que pegarla en el panel). Errores de Auth traducidos en `lib/authErrors.ts`
 - `app/(tabs)/`: pestañas inferiores: `index.tsx` (feed), `explore.tsx` (personas y publicaciones con filtros de ciudad, disciplina, estilo y disponibilidad) y `profile.tsx` (mi perfil); `app/edit-profile.tsx`: editarlo
 - `app/user/[id].tsx`: perfil de otro con botón Seguir (optimista); `app/follow-list.tsx?userId&kind`: seguidores/seguidos
 - `lib/follows.ts`: seguir, dejar de seguir y listas; `components/ProfileHeader.tsx` se comparte entre mi perfil y el de otros
@@ -70,7 +70,7 @@ Origen: el desarrollador es bailarín de baile urbano y parte de la idea de que 
 5. ~~Likes y comentarios~~ (hecho). Pendiente: un like/comentario hecho en el detalle no se refleja en el feed hasta refrescarlo (cada pantalla tiene su copia); lista de quién dio like
 6. ~~Chat 1 a 1 con tiempo real~~ (hecho). Pendiente: contador de no leídos en la pestaña, notificaciones push; si Realtime se queda corto con muchos usuarios, pasar a Broadcast
 7. ~~Denuncias y bloqueos~~ (hecho)
-8. Requisitos de tiendas: ~~términos, eliminar cuenta, aviso de denuncias, ajustes con contacto~~ (código hecho). Pendiente: recuperar contraseña; borrar denuncias de más de 12 meses (lo promete la política de privacidad; pg_cron); bundle id / package, iconos y capturas; cuenta de prueba para la revisión de Apple; formularios de privacidad de las tiendas
+8. Requisitos de tiendas: ~~términos, eliminar cuenta, aviso de denuncias, ajustes con contacto~~ (código hecho). Pendiente: borrar denuncias de más de 12 meses (lo promete la política de privacidad; pg_cron); bundle id / package, iconos y capturas; cuenta de prueba para la revisión de Apple; formularios de privacidad de las tiendas
 9. Vídeo (decidir Mux vs Cloudflare Stream)
 10. Más adelante: servicios como tabla propia, reservas y pagos
 

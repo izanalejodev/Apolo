@@ -30,6 +30,7 @@ import {
 } from '../lib/profile';
 import { showAlert } from '../lib/alert';
 import { useAuth } from '../providers/AuthProvider';
+import { INPUT_COLORS } from '../components/Field';
 
 export default function EditProfileScreen() {
   const { session } = useAuth();
@@ -211,7 +212,11 @@ function Field({ label, ...props }: TextInputProps & { label: string }) {
   return (
     <View style={{ gap: 6 }}>
       <Text style={s.label}>{label}</Text>
-      <TextInput style={[s.input, props.multiline && s.multiline]} {...props} />
+      <TextInput
+        style={[s.input, props.multiline && s.multiline]}
+        placeholderTextColor={INPUT_COLORS.placeholder}
+        {...props}
+      />
     </View>
   );
 }
@@ -221,7 +226,7 @@ const s = StyleSheet.create({
   avatar: { alignItems: 'center', gap: 8 },
   avatarText: { color: '#0a66c2' },
   label: { fontWeight: '600', color: '#333' },
-  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 10, padding: 12, fontSize: 16 },
+  input: { color: INPUT_COLORS.text, borderWidth: 1, borderColor: '#ccc', borderRadius: 10, padding: 12, fontSize: 16 },
   multiline: { minHeight: 80, textAlignVertical: 'top' },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   chip: {

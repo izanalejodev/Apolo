@@ -19,6 +19,7 @@ import { COMMENTS_PAGE_SIZE, COMMENT_MAX, Comment, addComment, deleteComment, fe
 import { FeedPost, deletePost, fetchPost, timeAgo } from '../../lib/posts';
 import { usePagedList } from '../../lib/usePagedList';
 import { useAuth } from '../../providers/AuthProvider';
+import { INPUT_COLORS } from '../../components/Field';
 
 // Detalle de una publicación: la publicación arriba, sus comentarios debajo
 // (más nuevos primero, con scroll infinito) y la caja para comentar abajo.
@@ -184,6 +185,7 @@ export default function PostScreen() {
       <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
         <TextInput
           style={styles.input}
+          placeholderTextColor={INPUT_COLORS.placeholder}
           value={text}
           onChangeText={setText}
           placeholder="Escribe un comentario…"
@@ -262,6 +264,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
   },
   input: {
+    color: INPUT_COLORS.text,
     flex: 1,
     maxHeight: 100,
     borderWidth: 1,
