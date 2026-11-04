@@ -1,0 +1,23 @@
+# Dependencias (se regeneran con npm install)
+node_modules/
+
+# Variables de entorno: nunca al repo
+.env*.local
+.env
+
+# Expo / Metro
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Builds nativos (los genera Expo con prebuild)
+/ios
+/android
+
+# TypeScript
+*.tsbuildinfo
+
+# Sistema / editores
+.DS_Store
+*.log
