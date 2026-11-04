@@ -3,13 +3,11 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { PostGrid } from '../../components/PostGrid';
 import { ProfileCounts, ProfileHeader, profileButtons as b } from '../../components/ProfileHeader';
-import { confirmAction } from '../../lib/alert';
 import { Post, fetchUserPosts } from '../../lib/posts';
 import { Profile, fetchProfile, fetchProfileCounts } from '../../lib/profile';
-import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../providers/AuthProvider';
 
-// Pestaña "Perfil": el mío, con botones de editar, publicar y cerrar sesión
+// Pestaña "Perfil": el mío, con botones de editar y publicar, y enlace a Ajustes
 export default function MyProfileScreen() {
   const { session } = useAuth();
   const router = useRouter();
@@ -55,12 +53,6 @@ export default function MyProfileScreen() {
     }
   }
 
-  function confirmSignOut() {
-    confirmAction('Cerrar sesión', '¿Seguro que quieres salir?', 'Salir', () =>
-      supabase.auth.signOut()
-    );
-  }
-
   function openList(kind: 'followers' | 'following') {
     if (userId) router.push({ pathname: '/follow-list', params: { userId, kind } });
   }
@@ -102,12 +94,9 @@ export default function MyProfileScreen() {
       {/* Para borrar una publicación: tocarla y "Borrar" en el detalle */}
       <PostGrid posts={posts} />
 
-      <Pressable onPress={() => router.push('/blocked')}>
-        <Text style={styles.link}>Cuentas bloqueadas</Text>
-      </Pressable>
-
-      <Pressable onPress={confirmSignOut}>
-        <Text style={styles.signOut}>Cerrar sesión</Text>
+      {/* Cerrar sesión, cuentas bloqueadas, eliminar cuenta, legal... */}
+      <Pressable onPress={() => router.push('/settings')}>
+        <Text style={styles.link}>Ajustes</Text>
       </Pressable>
     </ScrollView>
   );
@@ -119,5 +108,4 @@ const styles = StyleSheet.create({
   muted: { color: '#666' },
   buttons: { flexDirection: 'row', gap: 8 },
   link: { textAlign: 'center', color: '#444', marginTop: 8, padding: 8 },
-  signOut: { textAlign: 'center', color: '#c00', marginTop: 8, padding: 8 },
 });

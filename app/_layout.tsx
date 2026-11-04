@@ -13,8 +13,11 @@ function AuthGate() {
     if (loading) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    // Términos y privacidad se leen sin sesión: hay que poder abrirlos antes
+    // de registrarse, y en la web son las URL que piden las tiendas
+    const isPublic = segments[0] === 'legal';
 
-    if (!session && !inAuthGroup) {
+    if (!session && !inAuthGroup && !isPublic) {
       router.replace('/(auth)/login'); // sin sesión -> login
     } else if (session && inAuthGroup) {
       router.replace('/'); // con sesión -> pantalla principal
@@ -43,6 +46,9 @@ function AuthGate() {
       <Stack.Screen name="chat/[id]" options={{ title: '' }} />
       <Stack.Screen name="report" options={{ title: 'Denunciar', presentation: 'modal' }} />
       <Stack.Screen name="blocked" options={{ title: 'Cuentas bloqueadas' }} />
+      <Stack.Screen name="settings" options={{ title: 'Ajustes' }} />
+      <Stack.Screen name="delete-account" options={{ title: 'Eliminar cuenta' }} />
+      <Stack.Screen name="legal/[doc]" options={{ title: '' }} />
     </Stack>
   );
 }

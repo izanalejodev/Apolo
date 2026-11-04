@@ -113,6 +113,24 @@ grant update (display_name, bio, avatar_path, city, disciplines, styles,
 
 
 -- ---------------------------------------------------------------------
+-- TERMS_ACCEPTANCES (migración 007): qué versión de los términos aceptó
+-- cada uno y cuándo. La escribe el trigger de auth_trigger.sql.
+-- ---------------------------------------------------------------------
+create table public.terms_acceptances (
+  user_id     uuid not null references public.profiles (id) on delete cascade,
+  version     text not null check (char_length(version) between 1 and 20),
+  accepted_at timestamptz not null default now(),
+  primary key (user_id, version)
+);
+
+alter table public.terms_acceptances enable row level security;
+
+create policy terms_acceptances_select on public.terms_acceptances
+  for select to authenticated using ((select auth.uid()) = user_id);
+
+revoke insert, update, delete on public.terms_acceptances from authenticated, anon;
+
+-- ---------------------------------------------------------------------
 -- BLOCKS (migración 006): si A bloquea a B, en los dos sentidos no se ven
 -- posts ni comentarios, no se pueden seguir, comentar, dar like ni
 -- escribirse. Va aquí, antes que posts, porque sus políticas usan
