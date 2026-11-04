@@ -3,8 +3,8 @@ import { useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { PostGrid } from '../../components/PostGrid';
 import { ProfileCounts, ProfileHeader, profileButtons as b } from '../../components/ProfileHeader';
-import { confirmAction, showAlert } from '../../lib/alert';
-import { Post, deletePost, fetchUserPosts } from '../../lib/posts';
+import { confirmAction } from '../../lib/alert';
+import { Post, fetchUserPosts } from '../../lib/posts';
 import { Profile, fetchProfile, fetchProfileCounts } from '../../lib/profile';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../providers/AuthProvider';
@@ -55,17 +55,6 @@ export default function MyProfileScreen() {
     }
   }
 
-  function confirmDelete(post: Post) {
-    confirmAction('Borrar publicación', 'No se puede deshacer.', 'Borrar', async () => {
-      try {
-        await deletePost(post);
-        await load();
-      } catch (e: any) {
-        showAlert('No se pudo borrar', e.message);
-      }
-    });
-  }
-
   function confirmSignOut() {
     confirmAction('Cerrar sesión', '¿Seguro que quieres salir?', 'Salir', () =>
       supabase.auth.signOut()
@@ -110,9 +99,8 @@ export default function MyProfileScreen() {
         </View>
       </ProfileHeader>
 
-      {/* Mantener pulsado para borrar. Provisional hasta que haya pantalla
-          de detalle de la publicación. */}
-      <PostGrid posts={posts} onLongPress={confirmDelete} />
+      {/* Para borrar una publicación: tocarla y "Borrar" en el detalle */}
+      <PostGrid posts={posts} />
 
       <Pressable onPress={confirmSignOut}>
         <Text style={styles.signOut}>Cerrar sesión</Text>

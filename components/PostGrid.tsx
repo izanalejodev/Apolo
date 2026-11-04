@@ -1,9 +1,12 @@
+import { useRouter } from 'expo-router';
 import { Image, Pressable, StyleSheet, View } from 'react-native';
 import { publicUrl } from '../lib/media';
 import { Post } from '../lib/posts';
 
-// Cuadrícula de 3 columnas del perfil
-export function PostGrid({ posts, onLongPress }: { posts: Post[]; onLongPress?: (post: Post) => void }) {
+// Cuadrícula de 3 columnas del perfil. Al tocar, el detalle de la publicación
+// (donde están los comentarios y, si es mía, el botón de borrar).
+export function PostGrid({ posts }: { posts: Post[] }) {
+  const router = useRouter();
   if (posts.length === 0) return null;
   return (
     <View style={styles.grid}>
@@ -11,7 +14,7 @@ export function PostGrid({ posts, onLongPress }: { posts: Post[]; onLongPress?: 
         <Pressable
           key={post.id}
           style={styles.tile}
-          onLongPress={onLongPress ? () => onLongPress(post) : undefined}
+          onPress={() => router.push({ pathname: '/post/[id]', params: { id: post.id } })}
         >
           <Image source={{ uri: publicUrl('posts', post.media_path) }} style={styles.tileImage} />
         </Pressable>

@@ -89,5 +89,11 @@ export function usePagedList<T>(options: Options<T>) {
   // `items` en sus dependencias (eso era lo que causaba el bucle del feed)
   const isEmpty = useCallback(() => !itemsRef.current || itemsRef.current.length === 0, []);
 
-  return { items, error, loadingMore, refreshing, reload, loadMore, pullToRefresh, isEmpty };
+  // Cambiar la lista ya cargada sin pedirla otra vez: añadir el comentario
+  // que acabo de escribir, quitar uno borrado...
+  const update = useCallback((fn: (items: T[]) => T[]) => {
+    if (itemsRef.current) setBoth(fn(itemsRef.current));
+  }, []);
+
+  return { items, error, loadingMore, refreshing, reload, loadMore, pullToRefresh, isEmpty, update };
 }

@@ -40,6 +40,8 @@ Origen: el desarrollador es bailarín de baile urbano y parte de la idea de que 
 - `supabase/storage.sql`: buckets `avatars` y `posts` y sus políticas (archivos en `<bucket>/<user_id>/...`)
 - `lib/media.ts`: elegir, reducir y subir imágenes; en la BD se guarda la ruta (`*_path`), la URL se construye con `publicUrl`
 - `lib/posts.ts`: crear, listar y borrar publicaciones; `app/new-post.tsx`: pantalla de publicar
+- `app/post/[id].tsx`: detalle de publicación (comentarios, comentar, borrar si es mía). La abren el feed (icono 💬) y las cuadrículas de perfil y explorar
+- Likes y comentarios: `lib/likes.ts` (`useLike`, optimista) y `lib/comments.ts`. Los posts traen `like_count`, `comment_count` y `liked_by_me`, que son campos calculados de PostgREST (funciones SQL que reciben `public.posts`, migración 004) y se piden en el `select` como columnas
 - `components/`: componentes reutilizables (nunca dentro de `app/`, que son rutas)
 - `supabase/auth_trigger.sql`: trigger que crea el perfil al registrarse (el username va en `options.data.username`)
 
@@ -58,10 +60,10 @@ Origen: el desarrollador es bailarín de baile urbano y parte de la idea de que 
 ## Próximos pasos (por orden)
 
 1. ~~Pantalla de perfil: ver/editar y botón de cerrar sesión~~ (hecho)
-2. Publicar foto/vídeo: ~~fotos y avatar (Supabase Storage)~~ hecho; falta vídeo (decidir Mux vs Cloudflare Stream). Pendiente: pantalla de detalle de publicación (ahora se borra con pulsación larga en la cuadrícula) y paginación (ahora límite de 60)
+2. Publicar foto/vídeo: ~~fotos y avatar (Supabase Storage)~~ hecho; falta vídeo (decidir Mux vs Cloudflare Stream). Pendiente: paginación de la cuadrícula del perfil (ahora límite de 60)
 3. ~~Seguir a otros y feed~~ (hecho). Pendiente: guardar ancho/alto de la foto en `posts` para no recortarla en el feed
 4. ~~Explorar y búsqueda con filtros~~ (hecho). Pendiente: los chips de ciudad/estilo muestran solo los 30 más usados; las publicaciones se filtran por el perfil del autor, no por `posts.tags` (la app aún no pone tags)
-5. Likes y comentarios
+5. ~~Likes y comentarios~~ (hecho). Pendiente: un like/comentario hecho en el detalle no se refleja en el feed hasta refrescarlo (cada pantalla tiene su copia); lista de quién dio like
 6. Chat (tablas conversations, conversation_members, messages + Realtime)
 7. Denuncias/moderación
 8. Más adelante: servicios como tabla propia, reservas y pagos

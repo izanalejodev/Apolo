@@ -225,7 +225,8 @@ create table public.comments (
   created_at timestamptz not null default now()
 );
 
-create index comments_post_created_idx on public.comments (post_id, created_at);
+-- Comentarios de un post, más nuevos primero, paginando por (created_at, id)
+create index comments_post_created_idx on public.comments (post_id, created_at desc, id desc);
 
 alter table public.comments enable row level security;
 
@@ -243,6 +244,52 @@ create policy comments_delete on public.comments
 
 revoke insert, update on public.comments from authenticated, anon;
 grant insert (post_id, author_id, body) on public.comments to authenticated;
+
+
+-- ---------------------------------------------------------------------
+-- CONTADORES DE POSTS (migración 004): campos calculados de PostgREST.
+-- Una función que recibe una fila de posts se pide en el select como una
+-- columna más: .select('*, like_count, comment_count, liked_by_me')
+-- ---------------------------------------------------------------------
+create or replace function public.like_count(p public.posts)
+returns bigint
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select count(*) from public.likes l where l.post_id = p.id;
+$$;
+
+create or replace function public.comment_count(p public.posts)
+returns bigint
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select count(*) from public.comments c where c.post_id = p.id;
+$$;
+
+create or replace function public.liked_by_me(p public.posts)
+returns boolean
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.likes l
+    where l.post_id = p.id and l.user_id = (select auth.uid())
+  );
+$$;
+
+revoke execute on function public.like_count(public.posts)    from public, anon;
+revoke execute on function public.comment_count(public.posts) from public, anon;
+revoke execute on function public.liked_by_me(public.posts)   from public, anon;
+grant execute on function public.like_count(public.posts)    to authenticated;
+grant execute on function public.comment_count(public.posts) to authenticated;
+grant execute on function public.liked_by_me(public.posts)   to authenticated;
 
 
 -- ---------------------------------------------------------------------

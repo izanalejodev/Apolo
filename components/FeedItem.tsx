@@ -1,17 +1,34 @@
 import { useRouter } from 'expo-router';
 import { memo } from 'react';
 import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useLike } from '../lib/likes';
 import { publicUrl } from '../lib/media';
 import { FeedPost, timeAgo } from '../lib/posts';
+import { useAuth } from '../providers/AuthProvider';
 import { Avatar } from './Avatar';
 
-// Una publicación del feed: autor, foto y texto.
+// Una publicación: autor, foto, me gusta/comentarios y texto. Se usa en el
+// feed y en la pantalla de detalle.
 // memo: al cargar la página siguiente, las 20 ya pintadas no se vuelven a
 // renderizar (sus props no han cambiado).
-export const FeedItem = memo(function FeedItem({ post }: { post: FeedPost }) {
+//
+// inDetail: en la pantalla de detalle el icono de comentarios no navega
+// (los comentarios ya están debajo).
+export const FeedItem = memo(function FeedItem({
+  post,
+  inDetail = false,
+}: {
+  post: FeedPost;
+  inDetail?: boolean;
+}) {
   const router = useRouter();
+  const { session } = useAuth();
+  const heart = useLike(session?.user.id, post.id, { liked: post.liked_by_me, count: post.like_count });
   const name = post.author.display_name || post.author.username;
   const openAuthor = () => router.push({ pathname: '/user/[id]', params: { id: post.author_id } });
+  const openDetail = inDetail
+    ? undefined
+    : () => router.push({ pathname: '/post/[id]', params: { id: post.id } });
 
   return (
     <View style={styles.item}>
@@ -26,6 +43,17 @@ export const FeedItem = memo(function FeedItem({ post }: { post: FeedPost }) {
       {/* Cuadrada y recortada: no guardamos el ancho/alto de la foto, así que
           no sabemos su proporción antes de descargarla. Ver notas. */}
       <Image source={{ uri: publicUrl('posts', post.media_path) }} style={styles.image} />
+
+      <View style={styles.actions}>
+        <Pressable style={styles.action} onPress={heart.toggle} hitSlop={8}>
+          <Text style={[styles.icon, heart.liked && styles.liked]}>{heart.liked ? '♥' : '♡'}</Text>
+          <Text style={styles.count}>{heart.count}</Text>
+        </Pressable>
+        <Pressable style={styles.action} onPress={openDetail} disabled={!openDetail} hitSlop={8}>
+          <Text style={styles.icon}>💬</Text>
+          <Text style={styles.count}>{post.comment_count}</Text>
+        </Pressable>
+      </View>
 
       {post.caption && (
         <Text style={styles.caption}>
@@ -43,5 +71,10 @@ const styles = StyleSheet.create({
   name: { fontSize: 15, fontWeight: '600' },
   muted: { color: '#666', fontSize: 12 },
   image: { width: '100%', aspectRatio: 1, backgroundColor: '#eee' },
-  caption: { fontSize: 15, lineHeight: 21, paddingHorizontal: 12, paddingTop: 8 },
+  actions: { flexDirection: 'row', gap: 18, paddingHorizontal: 12, paddingTop: 8 },
+  action: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  icon: { fontSize: 22 },
+  liked: { color: '#e0245e' },
+  count: { fontSize: 15, fontWeight: '600' },
+  caption: { fontSize: 15, lineHeight: 21, paddingHorizontal: 12, paddingTop: 6 },
 });

@@ -51,8 +51,24 @@ export async function fetchUserPosts(userId: string) {
   return data;
 }
 
-// Post del feed: la fila más los datos del autor para la cabecera
-export type FeedPost = Post & { author: ProfileSummary };
+// Post del feed (y del detalle): la fila, el autor para la cabecera y los
+// contadores. like_count, comment_count y liked_by_me no son columnas de
+// verdad sino funciones de la BD (migración 004) que PostgREST deja pedir
+// como si lo fueran.
+export type FeedPost = Post & {
+  author: ProfileSummary;
+  like_count: number;
+  comment_count: number;
+  liked_by_me: boolean;
+};
+
+// profiles!author_id = "el perfil al que apunta posts.author_id". Hay que
+// decirlo porque posts y profiles están unidos por más de un camino: el
+// directo (author_id) y a través de likes, que PostgREST reconoce como
+// tabla intermedia (su PK son dos claves foráneas: user_id y post_id) y
+// entiende como "los perfiles que dieron like al post". Sin la pista, no
+// sabe cuál quieres y devuelve error.
+const FEED_POST_COLUMNS = `*, like_count, comment_count, liked_by_me, author:profiles!author_id(${PROFILE_SUMMARY_COLUMNS})`;
 
 // Dónde se quedó la página anterior (ver supabase/migrations/002_feed.sql)
 export type FeedCursor = { created_at: string; id: string };
@@ -70,11 +86,22 @@ export async function fetchFeed(cursor: FeedCursor | null) {
       before_id: cursor?.id ?? null,
       page_size: FEED_PAGE_SIZE,
     })
-    .select(`*, author:profiles(${PROFILE_SUMMARY_COLUMNS})`);
+    .select(FEED_POST_COLUMNS);
   if (error) throw error;
   // Sin tipos generados del esquema, supabase-js no sabe que feed() devuelve
   // una lista de posts, así que se lo decimos nosotros.
   return (data ?? []) as unknown as FeedPost[];
+}
+
+// Un post suelto, para la pantalla de detalle. null si no existe (o se borró)
+export async function fetchPost(id: string) {
+  const { data, error } = await supabase
+    .from('posts')
+    .select(FEED_POST_COLUMNS)
+    .eq('id', id)
+    .maybeSingle<FeedPost>();
+  if (error) throw error;
+  return data;
 }
 
 // "hace 5 min", "hace 3 h", "hace 2 d" y, a partir de una semana, la fecha

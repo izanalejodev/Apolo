@@ -39,6 +39,7 @@ function AuthGate() {
       <Stack.Screen name="follow-list" options={{ title: '' }} />
       <Stack.Screen name="edit-profile" options={{ title: 'Editar perfil' }} />
       <Stack.Screen name="new-post" options={{ title: 'Nueva publicación' }} />
+      <Stack.Screen name="post/[id]" options={{ title: 'Publicación' }} />
     </Stack>
   );
 }

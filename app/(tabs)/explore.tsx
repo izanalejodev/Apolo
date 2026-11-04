@@ -186,10 +186,9 @@ export default function ExploreScreen() {
       keyExtractor={(p) => p.id}
       numColumns={3}
       renderItem={({ item }) => (
-        // Sin pantalla de detalle todavía: al tocar, el perfil del autor
         <Pressable
           style={styles.tile}
-          onPress={() => router.push({ pathname: '/user/[id]', params: { id: item.author_id } })}
+          onPress={() => router.push({ pathname: '/post/[id]', params: { id: item.id } })}
         >
           <Image source={{ uri: publicUrl('posts', item.media_path) }} style={styles.tileImage} />
         </Pressable>
