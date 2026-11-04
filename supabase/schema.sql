@@ -113,6 +113,78 @@ grant update (display_name, bio, avatar_path, city, disciplines, styles,
 
 
 -- ---------------------------------------------------------------------
+-- BLOCKS (migración 006): si A bloquea a B, en los dos sentidos no se ven
+-- posts ni comentarios, no se pueden seguir, comentar, dar like ni
+-- escribirse. Va aquí, antes que posts, porque sus políticas usan
+-- is_blocked_with(). Se bloquea solo con block_user() (borra los follows).
+-- ---------------------------------------------------------------------
+create table public.blocks (
+  blocker_id uuid not null references public.profiles (id) on delete cascade,
+  blocked_id uuid not null references public.profiles (id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (blocker_id, blocked_id),
+  check (blocker_id <> blocked_id)
+);
+
+create index blocks_blocked_idx on public.blocks (blocked_id);
+
+alter table public.blocks enable row level security;
+
+create policy blocks_select on public.blocks
+  for select to authenticated using ((select auth.uid()) = blocker_id);
+create policy blocks_delete on public.blocks
+  for delete to authenticated using ((select auth.uid()) = blocker_id);
+
+revoke insert, update on public.blocks from authenticated, anon;
+
+-- security definer: ve también los bloqueos que me han hecho (blocks_select no)
+create or replace function public.is_blocked_with(other uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.blocks b
+    where (b.blocker_id = (select auth.uid()) and b.blocked_id = other)
+       or (b.blocker_id = other and b.blocked_id = (select auth.uid()))
+  );
+$$;
+
+create or replace function public.block_user(target uuid)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  v_me uuid := (select auth.uid());
+begin
+  if v_me is null then
+    raise exception 'Hace falta iniciar sesión';
+  end if;
+  if target is null or target = v_me then
+    raise exception 'No puedes bloquearte a ti mismo';
+  end if;
+
+  insert into public.blocks (blocker_id, blocked_id) values (v_me, target)
+  on conflict do nothing;
+
+  delete from public.follows f
+  where (f.follower_id = v_me and f.followed_id = target)
+     or (f.follower_id = target and f.followed_id = v_me);
+end;
+$$;
+
+revoke execute on function public.is_blocked_with(uuid) from public, anon;
+revoke execute on function public.block_user(uuid)      from public, anon;
+grant execute on function public.is_blocked_with(uuid) to authenticated;
+grant execute on function public.block_user(uuid)      to authenticated;
+
+
+-- ---------------------------------------------------------------------
 -- POSTS: publicaciones de foto o vídeo (vídeo de 60 s como máximo)
 -- ---------------------------------------------------------------------
 create table public.posts (
@@ -137,7 +209,7 @@ create index posts_tags_idx           on public.posts using gin (tags);
 alter table public.posts enable row level security;
 
 create policy posts_select on public.posts
-  for select to authenticated using (true);
+  for select to authenticated using (not public.is_blocked_with(author_id));
 
 create policy posts_insert on public.posts
   for insert to authenticated
@@ -181,7 +253,8 @@ alter table public.follows enable row level security;
 create policy follows_select on public.follows
   for select to authenticated using (true);
 create policy follows_insert on public.follows
-  for insert to authenticated with check ((select auth.uid()) = follower_id);
+  for insert to authenticated
+  with check ((select auth.uid()) = follower_id and not public.is_blocked_with(followed_id));
 create policy follows_delete on public.follows
   for delete to authenticated using ((select auth.uid()) = follower_id);
 
@@ -206,7 +279,11 @@ alter table public.likes enable row level security;
 create policy likes_select on public.likes
   for select to authenticated using (true);
 create policy likes_insert on public.likes
-  for insert to authenticated with check ((select auth.uid()) = user_id);
+  for insert to authenticated
+  with check (
+    (select auth.uid()) = user_id
+    and not public.is_blocked_with((select p.author_id from public.posts p where p.id = post_id))
+  );
 create policy likes_delete on public.likes
   for delete to authenticated using ((select auth.uid()) = user_id);
 
@@ -231,9 +308,13 @@ create index comments_post_created_idx on public.comments (post_id, created_at d
 alter table public.comments enable row level security;
 
 create policy comments_select on public.comments
-  for select to authenticated using (true);
+  for select to authenticated using (not public.is_blocked_with(author_id));
 create policy comments_insert on public.comments
-  for insert to authenticated with check ((select auth.uid()) = author_id);
+  for insert to authenticated
+  with check (
+    (select auth.uid()) = author_id
+    and not public.is_blocked_with((select p.author_id from public.posts p where p.id = post_id))
+  );
 -- Puede borrar el autor del comentario o el dueño del post
 create policy comments_delete on public.comments
   for delete to authenticated
@@ -352,6 +433,7 @@ as $$
   select p.*
   from public.profiles p
   where p.id <> (select auth.uid())  -- no me busco a mí mismo
+    and not public.is_blocked_with(p.id)
     and (
       search_text is null
       -- % y _ son comodines de LIKE; se escapan para que "izan_a" busque
@@ -491,6 +573,24 @@ as $$
   );
 $$;
 
+create or replace function public.conversation_blocked(conv uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1 from public.conversation_members m
+    where m.conversation_id = conv
+      and m.user_id <> (select auth.uid())
+      and public.is_blocked_with(m.user_id)
+  );
+$$;
+
+revoke execute on function public.conversation_blocked(uuid) from public, anon;
+grant execute on function public.conversation_blocked(uuid) to authenticated;
+
 alter table public.conversations        enable row level security;
 alter table public.conversation_members enable row level security;
 alter table public.messages             enable row level security;
@@ -517,6 +617,7 @@ create policy messages_insert on public.messages
   with check (
     (select auth.uid()) = sender_id
     and public.is_conversation_member(conversation_id)
+    and not public.conversation_blocked(conversation_id)
   );
 
 revoke insert, update, delete on public.conversations        from authenticated, anon;
@@ -545,6 +646,9 @@ begin
   end if;
   if not exists (select 1 from public.profiles p where p.id = other_user) then
     raise exception 'Ese usuario no existe';
+  end if;
+  if public.is_blocked_with(other_user) then
+    raise exception 'No puedes escribir a esta persona';
   end if;
 
   v_key := least(v_me::text, other_user::text) || ':' || greatest(v_me::text, other_user::text);
@@ -632,3 +736,111 @@ grant execute on function public.mark_conversation_read(uuid)                  t
 grant execute on function public.my_conversations(timestamptz, uuid, integer)  to authenticated;
 
 alter publication supabase_realtime add table public.messages;
+
+
+-- ---------------------------------------------------------------------
+-- REPORTS (migración 006): denuncias. Sin políticas: la app solo denuncia
+-- con report_content(), que saca de la BD de quién es el contenido y guarda
+-- una copia. Se revisan en el panel de Supabase (service_role).
+-- ---------------------------------------------------------------------
+create type public.report_target_kind as enum ('post', 'comment', 'message', 'profile');
+create type public.report_reason      as enum ('spam', 'harassment', 'hate', 'nudity',
+                                               'violence', 'impersonation', 'other');
+create type public.report_status      as enum ('pending', 'resolved', 'dismissed');
+
+create table public.reports (
+  id               uuid primary key default gen_random_uuid(),
+  -- set null y no cascade: la denuncia se queda aunque alguien borre su cuenta
+  reporter_id      uuid references public.profiles (id) on delete set null,
+  reported_user_id uuid references public.profiles (id) on delete set null,
+  target_kind      public.report_target_kind not null,
+  target_id        uuid not null,  -- sin FK a propósito: el contenido puede borrarse
+  reason           public.report_reason not null,
+  details          text check (char_length(details) <= 1000),
+  snapshot         jsonb not null,  -- copia del contenido al denunciar
+  status           public.report_status not null default 'pending',
+  created_at       timestamptz not null default now(),
+  resolved_at      timestamptz,
+  -- Una denuncia por persona y contenido: denunciar 50 veces no cuenta 50
+  unique (reporter_id, target_kind, target_id)
+);
+
+-- Lo que miras al revisar: las pendientes, más antiguas primero
+create index reports_status_created_idx on public.reports (status, created_at);
+-- "¿Cuántas denuncias tiene este usuario?"
+create index reports_reported_user_idx  on public.reports (reported_user_id);
+
+-- RLS activado y SIN políticas: desde la app nadie lee ni escribe aquí
+-- directamente. Se entra solo por report_content(). (El panel de Supabase
+-- usa la service_role, que se salta RLS: ahí es donde se revisan.)
+alter table public.reports enable row level security;
+revoke all on public.reports from authenticated, anon;
+
+
+create or replace function public.report_content(
+  p_kind    public.report_target_kind,
+  p_target  uuid,
+  p_reason  public.report_reason,
+  p_details text default null
+)
+returns void
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $$
+declare
+  v_me   uuid := (select auth.uid());
+  v_user uuid;
+  v_snap jsonb;
+begin
+  if v_me is null then
+    raise exception 'Hace falta iniciar sesión';
+  end if;
+
+  -- De quién es y qué decía, sacado de la BD (no de lo que diga la app)
+  if p_kind = 'post' then
+    select po.author_id,
+           jsonb_build_object('caption', po.caption, 'media_path', po.media_path,
+                              'media_type', po.media_type, 'created_at', po.created_at)
+      into v_user, v_snap
+      from public.posts po where po.id = p_target;
+  elsif p_kind = 'comment' then
+    select c.author_id,
+           jsonb_build_object('body', c.body, 'post_id', c.post_id, 'created_at', c.created_at)
+      into v_user, v_snap
+      from public.comments c where c.id = p_target;
+  elsif p_kind = 'message' then
+    -- Solo puedo denunciar mensajes de conversaciones donde estoy
+    select m.sender_id,
+           jsonb_build_object('body', m.body, 'conversation_id', m.conversation_id,
+                              'created_at', m.created_at)
+      into v_user, v_snap
+      from public.messages m
+     where m.id = p_target and public.is_conversation_member(m.conversation_id);
+  elsif p_kind = 'profile' then
+    select pr.id,
+           jsonb_build_object('username', pr.username, 'display_name', pr.display_name,
+                              'bio', pr.bio, 'avatar_path', pr.avatar_path,
+                              'services_text', pr.services_text, 'contact_link', pr.contact_link)
+      into v_user, v_snap
+      from public.profiles pr where pr.id = p_target;
+  end if;
+
+  if v_user is null then
+    raise exception 'No se encontró el contenido';
+  end if;
+  if v_user = v_me then
+    raise exception 'No puedes denunciar algo tuyo';
+  end if;
+
+  insert into public.reports (reporter_id, reported_user_id, target_kind, target_id,
+                              reason, details, snapshot)
+  values (v_me, v_user, p_kind, p_target, p_reason,
+          nullif(left(trim(p_details), 1000), ''), v_snap)
+  on conflict (reporter_id, target_kind, target_id) do nothing;
+end;
+$$;
+
+revoke execute on function public.report_content(public.report_target_kind, uuid, public.report_reason, text) from public, anon;
+grant execute on function public.report_content(public.report_target_kind, uuid, public.report_reason, text) to authenticated;

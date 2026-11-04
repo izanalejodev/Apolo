@@ -43,6 +43,7 @@ Origen: el desarrollador es bailarín de baile urbano y parte de la idea de que 
 - `app/post/[id].tsx`: detalle de publicación (comentarios, comentar, borrar si es mía). La abren el feed (icono 💬) y las cuadrículas de perfil y explorar
 - Likes y comentarios: `lib/likes.ts` (`useLike`, optimista) y `lib/comments.ts`. Los posts traen `like_count`, `comment_count` y `liked_by_me`, que son campos calculados de PostgREST (funciones SQL que reciben `public.posts`, migración 004) y se piden en el `select` como columnas
 - Chat (migración 005): `lib/chat.ts`, `app/(tabs)/messages.tsx` (bandeja) y `app/chat/[id].tsx` (conversación). Solo 1 a 1 por ahora, pero con tabla `conversation_members` para poder hacer grupos. Las conversaciones se crean solo con la función `get_or_create_dm` (la app no puede insertar en `conversations` ni en `conversation_members`); bandeja con `my_conversations()`, leído con `mark_conversation_read()` (`last_read_at`). Las políticas usan `is_conversation_member()` (security definer, para evitar la recursión infinita de RLS). Tiempo real con Realtime `postgres_changes` sobre `messages` (aplica RLS); al suscribirse o reconectar se recarga para no perder lo que llegó sin conexión
+- Moderación (migración 006): `lib/moderation.ts`, `app/report.tsx?kind&id` (modal de denuncia) y `app/blocked.tsx` (cuentas bloqueadas). Un bloqueo vale en los dos sentidos y lo aplica RLS con `is_blocked_with()` (posts y comentarios ocultos, sin follows, likes, comentarios ni mensajes, fuera de la búsqueda); se bloquea con `block_user()` (borra los follows en los dos sentidos) y se desbloquea borrando la fila de `blocks`. Las denuncias se crean solo con `report_content()`, que saca el autor de la BD y guarda una copia (`snapshot`); `reports` no tiene políticas: se revisa en el panel de Supabase
 - `components/`: componentes reutilizables (nunca dentro de `app/`, que son rutas)
 - `supabase/auth_trigger.sql`: trigger que crea el perfil al registrarse (el username va en `options.data.username`)
 
@@ -55,7 +56,7 @@ Origen: el desarrollador es bailarín de baile urbano y parte de la idea de que 
 - Nombres reales a recordar: `follows.followed_id` (no following_id), `posts.duration_seconds`, enums `availability_status` y `media_kind`.
 - No guardar contadores (likes, seguidores); se calculan con `count(*)`.
 - Las disciplinas son una lista cerrada que vive en dos sitios: `DISCIPLINES` en `lib/profile.ts` y el CHECK `profiles_disciplines_validas` de `schema.sql`. Cambiar ambos a la vez. Igual con las columnas editables (`ProfileUpdate` ↔ `grant update`).
-- Antes de publicar en tiendas: confirmación de email activada (ahora desactivada para desarrollar) y tabla `reports` (denuncias), que Apple/Google exigen en apps con contenido de usuarios.
+- Antes de publicar en tiendas: confirmación de email activada (ahora desactivada para desarrollar), borrar la cuenta desde la app (Apple lo exige), aceptar términos de uso al registrarse (tolerancia cero con contenido ofensivo, Apple lo exige en apps con contenido de usuarios) y un aviso cuando llegue una denuncia (Apple pide actuar en 24 h). Bloquear y denunciar ya están.
 - El proyecto se desarrolla fuera del horario laboral, con equipos y cuentas personales y sin reutilizar código ni datos de ninguna empresa (importante para poder venderlo con la titularidad clara). Repositorio privado en cuenta personal de GitHub.
 
 ## Próximos pasos (por orden)
@@ -65,8 +66,8 @@ Origen: el desarrollador es bailarín de baile urbano y parte de la idea de que 
 3. ~~Seguir a otros y feed~~ (hecho). Pendiente: guardar ancho/alto de la foto en `posts` para no recortarla en el feed
 4. ~~Explorar y búsqueda con filtros~~ (hecho). Pendiente: los chips de ciudad/estilo muestran solo los 30 más usados; las publicaciones se filtran por el perfil del autor, no por `posts.tags` (la app aún no pone tags)
 5. ~~Likes y comentarios~~ (hecho). Pendiente: un like/comentario hecho en el detalle no se refleja en el feed hasta refrescarlo (cada pantalla tiene su copia); lista de quién dio like
-6. ~~Chat 1 a 1 con tiempo real~~ (hecho). Pendiente: contador de no leídos en la pestaña, notificaciones push, y que se pueda bloquear a alguien (va con el paso 7); si Realtime se queda corto con muchos usuarios, pasar a Broadcast
-7. Denuncias/moderación
+6. ~~Chat 1 a 1 con tiempo real~~ (hecho). Pendiente: contador de no leídos en la pestaña, notificaciones push; si Realtime se queda corto con muchos usuarios, pasar a Broadcast
+7. ~~Denuncias y bloqueos~~ (hecho). Pendiente: aviso de denuncias nuevas (Database Webhook a email/Telegram) y lo de "Antes de publicar en tiendas"
 8. Más adelante: servicios como tabla propia, reservas y pagos
 
 ## Cómo trabajar conmigo

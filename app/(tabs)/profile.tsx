@@ -102,6 +102,10 @@ export default function MyProfileScreen() {
       {/* Para borrar una publicación: tocarla y "Borrar" en el detalle */}
       <PostGrid posts={posts} />
 
+      <Pressable onPress={() => router.push('/blocked')}>
+        <Text style={styles.link}>Cuentas bloqueadas</Text>
+      </Pressable>
+
       <Pressable onPress={confirmSignOut}>
         <Text style={styles.signOut}>Cerrar sesión</Text>
       </Pressable>
@@ -114,5 +118,6 @@ const styles = StyleSheet.create({
   container: { padding: 24, gap: 14 },
   muted: { color: '#666' },
   buttons: { flexDirection: 'row', gap: 8 },
+  link: { textAlign: 'center', color: '#444', marginTop: 8, padding: 8 },
   signOut: { textAlign: 'center', color: '#c00', marginTop: 8, padding: 8 },
 });

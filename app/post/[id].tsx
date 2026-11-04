@@ -88,6 +88,10 @@ export default function PostScreen() {
     });
   }
 
+  function report(kind: 'post' | 'comment', targetId: string) {
+    router.push({ pathname: '/report', params: { kind, id: targetId } });
+  }
+
   function confirmDeletePost() {
     if (!post) return;
     confirmAction('Borrar publicación', 'No se puede deshacer.', 'Borrar', async () => {
@@ -129,13 +133,16 @@ export default function PostScreen() {
       <Stack.Screen
         options={{
           title: 'Publicación',
-          headerRight: isMine
-            ? () => (
-                <Pressable onPress={confirmDeletePost} hitSlop={8}>
-                  <Text style={styles.danger}>Borrar</Text>
-                </Pressable>
-              )
-            : undefined,
+          headerRight: () =>
+            isMine ? (
+              <Pressable onPress={confirmDeletePost} hitSlop={8}>
+                <Text style={styles.danger}>Borrar</Text>
+              </Pressable>
+            ) : (
+              <Pressable onPress={() => report('post', post.id)} hitSlop={8}>
+                <Text style={styles.danger}>Denunciar</Text>
+              </Pressable>
+            ),
         }}
       />
 
@@ -155,6 +162,7 @@ export default function PostScreen() {
             // misma regla que la política comments_delete; aquí solo decide
             // si se enseña el botón, quien manda es la BD)
             onDelete={item.author_id === me || isMine ? () => confirmDeleteComment(item) : undefined}
+            onReport={item.author_id !== me ? () => report('comment', item.id) : undefined}
           />
         )}
         ListEmptyComponent={
@@ -192,7 +200,15 @@ export default function PostScreen() {
   );
 }
 
-function CommentRow({ comment, onDelete }: { comment: Comment; onDelete?: () => void }) {
+function CommentRow({
+  comment,
+  onDelete,
+  onReport,
+}: {
+  comment: Comment;
+  onDelete?: () => void;
+  onReport?: () => void;
+}) {
   const router = useRouter();
   const name = comment.author.display_name || comment.author.username;
   const openAuthor = () => router.push({ pathname: '/user/[id]', params: { id: comment.author_id } });
@@ -212,6 +228,11 @@ function CommentRow({ comment, onDelete }: { comment: Comment; onDelete?: () => 
           {onDelete && (
             <Text style={styles.muted} onPress={onDelete}>
               Borrar
+            </Text>
+          )}
+          {onReport && (
+            <Text style={styles.muted} onPress={onReport}>
+              Denunciar
             </Text>
           )}
         </View>

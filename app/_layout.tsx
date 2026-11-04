@@ -41,6 +41,8 @@ function AuthGate() {
       <Stack.Screen name="new-post" options={{ title: 'Nueva publicación' }} />
       <Stack.Screen name="post/[id]" options={{ title: 'Publicación' }} />
       <Stack.Screen name="chat/[id]" options={{ title: '' }} />
+      <Stack.Screen name="report" options={{ title: 'Denunciar', presentation: 'modal' }} />
+      <Stack.Screen name="blocked" options={{ title: 'Cuentas bloqueadas' }} />
     </Stack>
   );
 }

@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '../../components/Avatar';
-import { showAlert } from '../../lib/alert';
+import { confirmAction, showAlert } from '../../lib/alert';
 import {
   MESSAGES_PAGE_SIZE,
   MESSAGE_MAX,
@@ -26,6 +26,7 @@ import {
   sendMessage,
   subscribeToMessages,
 } from '../../lib/chat';
+import { isBlockedByMe, isRlsError, unblockUser } from '../../lib/moderation';
 import { ProfileSummary } from '../../lib/profile';
 import { usePagedList } from '../../lib/usePagedList';
 import { useAuth } from '../../providers/AuthProvider';
@@ -44,6 +45,7 @@ export default function ChatScreen() {
   const [peer, setPeer] = useState<ProfileSummary | null | undefined>(undefined);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [blocked, setBlocked] = useState(false); // ¿lo he bloqueado yo?
 
   const messages = usePagedList<Message>({
     fetchPage: (last) => fetchMessages(id, last),
@@ -62,6 +64,17 @@ export default function ChatScreen() {
       active = false;
     };
   }, [id, me]);
+
+  useEffect(() => {
+    if (!me || !peer) return;
+    let active = true;
+    isBlockedByMe(me, peer.id)
+      .then((b) => active && setBlocked(b))
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [me, peer]);
 
   // Tiempo real. El orden importa y tiene trampa:
   //  1. Se carga la lista enseguida, para no esperar a la conexión.
@@ -105,10 +118,29 @@ export default function ChatScreen() {
       update((list) => mergeMessages(list, [created]));
       setText('');
     } catch (e: any) {
-      showAlert('No se pudo enviar', e.message);
+      // Si me han bloqueado, la BD rechaza el mensaje (no hay otra forma de
+      // saberlo desde aquí, a propósito). No decimos "te ha bloqueado".
+      showAlert('No se pudo enviar', isRlsError(e) ? 'No puedes enviar mensajes en esta conversación.' : e.message);
     } finally {
       setSending(false);
     }
+  }
+
+  async function unblock() {
+    if (!me || !peer) return;
+    try {
+      await unblockUser(me, peer.id);
+      setBlocked(false);
+    } catch (e: any) {
+      showAlert('No se pudo desbloquear', e.message);
+    }
+  }
+
+  // Mantener pulsado un mensaje del otro -> denunciarlo
+  function askReport(m: Message) {
+    confirmAction('Denunciar mensaje', '¿Quieres denunciar este mensaje?', 'Denunciar', () =>
+      router.push({ pathname: '/report', params: { kind: 'message', id: m.id } })
+    );
   }
 
   if (peer === null) {
@@ -154,7 +186,13 @@ export default function ChatScreen() {
           data={messages.items}
           inverted
           keyExtractor={(m) => m.id}
-          renderItem={({ item }) => <Bubble message={item} mine={item.sender_id === me} />}
+          renderItem={({ item }) => (
+            <Bubble
+              message={item}
+              mine={item.sender_id === me}
+              onLongPress={item.sender_id !== me ? () => askReport(item) : undefined}
+            />
+          )}
           // Invertida: el "final" es arriba del todo, los mensajes antiguos
           onEndReached={messages.loadMore}
           onEndReachedThreshold={0.5}
@@ -171,31 +209,44 @@ export default function ChatScreen() {
         />
       )}
 
-      <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
-        <TextInput
-          style={styles.input}
-          value={text}
-          onChangeText={setText}
-          placeholder="Mensaje…"
-          maxLength={MESSAGE_MAX}
-          multiline
-        />
-        <Pressable onPress={send} disabled={!text.trim() || sending} hitSlop={8}>
-          <Text style={[styles.send, (!text.trim() || sending) && styles.sendDisabled]}>
-            {sending ? '…' : 'Enviar'}
-          </Text>
-        </Pressable>
-      </View>
+      {blocked ? (
+        <View style={[styles.blockedBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+          <Text style={styles.muted}>Has bloqueado a esta cuenta.</Text>
+          <Pressable onPress={unblock} hitSlop={8}>
+            <Text style={styles.send}>Desbloquear</Text>
+          </Pressable>
+        </View>
+      ) : (
+        <View style={[styles.inputBar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+          <TextInput
+            style={styles.input}
+            value={text}
+            onChangeText={setText}
+            placeholder="Mensaje…"
+            maxLength={MESSAGE_MAX}
+            multiline
+          />
+          <Pressable onPress={send} disabled={!text.trim() || sending} hitSlop={8}>
+            <Text style={[styles.send, (!text.trim() || sending) && styles.sendDisabled]}>
+              {sending ? '…' : 'Enviar'}
+            </Text>
+          </Pressable>
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 }
 
-function Bubble({ message, mine }: { message: Message; mine: boolean }) {
+function Bubble({ message, mine, onLongPress }: { message: Message; mine: boolean; onLongPress?: () => void }) {
   return (
-    <View style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}>
+    <Pressable
+      style={[styles.bubble, mine ? styles.bubbleMine : styles.bubbleTheirs]}
+      onLongPress={onLongPress}
+      disabled={!onLongPress}
+    >
       <Text style={[styles.body, mine && styles.bodyMine]}>{message.body}</Text>
       <Text style={[styles.time, mine && styles.timeMine]}>{messageTime(message.created_at)}</Text>
-    </View>
+    </Pressable>
   );
 }
 
@@ -233,5 +284,14 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   send: { color: '#111', fontSize: 16, fontWeight: '600' },
+  blockedBar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#ccc',
+  },
   sendDisabled: { color: '#aaa' },
 });
