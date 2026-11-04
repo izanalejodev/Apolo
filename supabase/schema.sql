@@ -21,6 +21,25 @@
 
 
 -- ---------------------------------------------------------------------
+-- EXTENSIONES Y FUNCIONES AUXILIARES (migración 003)
+-- ---------------------------------------------------------------------
+create extension if not exists unaccent with schema extensions;
+create extension if not exists pg_trgm  with schema extensions;
+
+-- unaccent() envuelta como immutable para poder usarla en índices
+create or replace function public.f_unaccent(t text)
+returns text
+language sql
+immutable
+parallel safe
+strict
+set search_path = ''
+as $$
+  select extensions.unaccent('extensions.unaccent'::regdictionary, t)
+$$;
+
+
+-- ---------------------------------------------------------------------
 -- TIPOS
 -- ---------------------------------------------------------------------
 create type public.availability_status as enum ('available', 'busy', 'not_looking');
@@ -64,7 +83,9 @@ create table public.profiles (
 );
 
 -- Búsqueda con filtros (ciudad, disciplinas, estilos)
-create index profiles_city_idx        on public.profiles (lower(city));
+create index profiles_city_idx        on public.profiles (public.f_unaccent(lower(city)));
+create index profiles_name_trgm_idx   on public.profiles
+  using gin (public.f_unaccent(lower(username || ' ' || coalesce(display_name, ''))) extensions.gin_trgm_ops);
 create index profiles_disciplines_idx on public.profiles using gin (disciplines);
 create index profiles_styles_idx      on public.profiles using gin (styles);
 
@@ -260,3 +281,116 @@ $$;
 
 revoke execute on function public.feed(timestamptz, uuid, integer) from public, anon;
 grant execute on function public.feed(timestamptz, uuid, integer) to authenticated;
+
+
+-- ---------------------------------------------------------------------
+-- EXPLORAR Y BÚSQUEDA (migración 003). Parámetros con prefijo filter_
+-- porque en SQL, si un parámetro se llama como una columna, gana la columna.
+-- ---------------------------------------------------------------------
+create or replace function public.search_profiles(
+  search_text       text    default null,
+  filter_city       text    default null,
+  filter_discipline text    default null,
+  filter_style      text    default null,
+  only_available    boolean default false,
+  after_username    text    default null,
+  page_size         integer default 20
+)
+returns setof public.profiles
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select p.*
+  from public.profiles p
+  where p.id <> (select auth.uid())  -- no me busco a mí mismo
+    and (
+      search_text is null
+      -- % y _ son comodines de LIKE; se escapan para que "izan_a" busque
+      -- exactamente eso (el _ es muy común en usernames)
+      or public.f_unaccent(lower(p.username || ' ' || coalesce(p.display_name, '')))
+         like '%' || replace(replace(replace(public.f_unaccent(lower(trim(search_text))),
+                       '\', '\\'), '%', '\%'), '_', '\_') || '%'
+    )
+    and (filter_city is null
+         or public.f_unaccent(lower(p.city)) = public.f_unaccent(lower(trim(filter_city))))
+    and (filter_discipline is null or p.disciplines @> array[filter_discipline])
+    and (filter_style is null or p.styles @> array[lower(trim(filter_style))])
+    and (not only_available or p.availability = 'available')
+    and (after_username is null or p.username > after_username)
+  order by p.username
+  limit least(greatest(page_size, 1), 50);
+$$;
+
+
+create or replace function public.explore_posts(
+  filter_city       text        default null,
+  filter_discipline text        default null,
+  filter_style      text        default null,
+  before_created_at timestamptz default null,
+  before_id         uuid        default null,
+  page_size         integer     default 30
+)
+returns setof public.posts
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select po.*
+  from public.posts po
+  join public.profiles p on p.id = po.author_id
+  where (filter_city is null
+         or public.f_unaccent(lower(p.city)) = public.f_unaccent(lower(trim(filter_city))))
+    and (filter_discipline is null or p.disciplines @> array[filter_discipline])
+    and (filter_style is null or p.styles @> array[lower(trim(filter_style))])
+    and (before_created_at is null or (po.created_at, po.id) < (before_created_at, before_id))
+  order by po.created_at desc, po.id desc
+  limit least(greatest(page_size, 1), 60);
+$$;
+
+
+-- Estilos más usados en los perfiles ("hip hop" 12, "popping" 7...)
+create or replace function public.popular_styles(max_results integer default 30)
+returns table (value text, n bigint)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select s, count(*)
+  from public.profiles p, unnest(p.styles) as s
+  group by s
+  order by count(*) desc, s
+  limit least(greatest(max_results, 1), 100);
+$$;
+
+-- Ciudades más usadas. Se agrupan sin tildes ni mayúsculas ("Cádiz",
+-- "cadiz" y "CADIZ" cuentan como una) y se muestra la forma más escrita.
+create or replace function public.popular_cities(max_results integer default 30)
+returns table (value text, n bigint)
+language sql
+stable
+security invoker
+set search_path = ''
+as $$
+  select mode() within group (order by p.city), count(*)
+  from public.profiles p
+  where p.city is not null
+  group by public.f_unaccent(lower(p.city))
+  order by count(*) desc, 1
+  limit least(greatest(max_results, 1), 100);
+$$;
+
+
+-- Solo usuarios con sesión. (f_unaccent se deja ejecutable: es una función
+-- pura que solo quita tildes, no lee ningún dato.)
+revoke execute on function public.search_profiles(text, text, text, text, boolean, text, integer) from public, anon;
+revoke execute on function public.explore_posts(text, text, text, timestamptz, uuid, integer)    from public, anon;
+revoke execute on function public.popular_styles(integer) from public, anon;
+revoke execute on function public.popular_cities(integer) from public, anon;
+grant execute on function public.search_profiles(text, text, text, text, boolean, text, integer) to authenticated;
+grant execute on function public.explore_posts(text, text, text, timestamptz, uuid, integer)    to authenticated;
+grant execute on function public.popular_styles(integer) to authenticated;
+grant execute on function public.popular_cities(integer) to authenticated;

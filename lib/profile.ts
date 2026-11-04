@@ -112,27 +112,6 @@ export async function fetchProfile(id: string) {
   return data;
 }
 
-// Búsqueda provisional por @usuario o nombre, para poder encontrar a quién
-// seguir. La búsqueda con filtros (ciudad, disciplina, estilo) es el paso 4.
-// ilike '%texto%' no usa índice normal: con pocos miles de perfiles va
-// sobrado; si crece, se añade un índice trigram (pg_trgm) en la BD.
-export async function searchProfiles(text: string) {
-  // Quitamos caracteres que tienen significado en el filtro de Supabase
-  // (comas, paréntesis) o en LIKE (% y *), para que el texto sea solo texto.
-  const q = text.trim().replace(/[%*,()\\"':]/g, '');
-  if (q.length < 2) return [];
-
-  const { data, error } = await supabase
-    .from('profiles')
-    .select(PROFILE_SUMMARY_COLUMNS)
-    .or(`username.ilike.%${q}%,display_name.ilike.%${q}%`)
-    .order('username')
-    .limit(30)
-    .returns<ProfileSummary[]>();
-  if (error) throw error;
-  return data;
-}
-
 // Partial: se puede actualizar solo una parte (p. ej. solo el avatar)
 export async function updateProfile(id: string, changes: Partial<ProfileUpdate>) {
   const { error } = await supabase.from('profiles').update(changes).eq('id', id);
